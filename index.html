@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrecioCosto — Calculadora para Emprendedores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #1a9e72;
+    --green-dark: #0d6e50;
+    --green-light: #e0f5ee;
+    --green-mid: #5dcaa5;
+    --amber: #e8960a;
+    --amber-light: #fef3dc;
+    --red: #d94040;
+    --red-light: #fdeaea;
+    --gray-50: #f8f7f4;
+    --gray-100: #eeece8;
+    --gray-200: #d6d3cc;
+    --gray-400: #9a9690;
+    --gray-600: #5c5850;
+    --gray-800: #2a2724;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-display: 'DM Serif Display', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+  }
+
+  body { font-family: var(--font-body); background: var(--gray-50); color: var(--gray-800); min-height: 100vh; font-size: 15px; line-height: 1.5; }
+
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* LOGIN */
+  #screen-login { align-items: center; justify-content: center; background: var(--gray-800); position: relative; overflow: hidden; }
+  #screen-login::before { content: ''; position: absolute; top: -120px; right: -120px; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(26,158,114,0.25) 0%, transparent 70%); }
+  #screen-login::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(circle, rgba(26,158,114,0.15) 0%, transparent 70%); }
+
+  .login-card { background: var(--white); border-radius: 20px; padding: 2.5rem 2rem; width: 90%; max-width: 400px; box-shadow: var(--shadow-lg); position: relative; z-index: 1; animation: fadeUp 0.4s ease; }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+  @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+
+  .login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 1.75rem; }
+  .logo-icon { width: 44px; height: 44px; background: var(--green); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+  .logo-icon svg { width: 24px; height: 24px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; }
+  .login-brand { font-family: var(--font-display); font-size: 24px; color: var(--gray-800); }
+  .login-tagline { font-size: 13px; color: var(--gray-400); }
+  .login-label { font-size: 13px; color: var(--gray-600); margin-bottom: 10px; font-weight: 500; }
+
+  .pin-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .pin-digit { width: 100%; min-width: 0; height: 64px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 30px; font-weight: 600; text-align: center; color: var(--gray-800); background: var(--gray-50); outline: none; transition: border-color 0.2s, box-shadow 0.2s; font-family: var(--font-body); -webkit-appearance: none; }
+  .pin-digit:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(26,158,114,0.15); background: var(--white); }
+
+  .btn-primary { width: 100%; padding: 13px; background: var(--green); color: white; border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; font-family: var(--font-body); transition: background 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-secondary { width: 100%; padding: 12px; background: transparent; color: var(--gray-600); border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--font-body); transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-secondary:hover { border-color: var(--green); color: var(--green); background: var(--green-light); }
+
+  .login-divider { text-align: center; font-size: 12px; color: var(--gray-400); margin: 12px 0; position: relative; }
+  .login-divider::before, .login-divider::after { content: ''; position: absolute; top: 50%; width: 38%; height: 1px; background: var(--gray-200); }
+  .login-divider::before { left: 0; }
+  .login-divider::after { right: 0; }
+  .login-footer { margin-top: 1.5rem; font-size: 12px; color: var(--gray-400); text-align: center; line-height: 1.6; }
+  .pin-error { font-size: 12px; color: var(--red); margin-bottom: 10px; display: none; }
+
+  /* APP SHELL */
+  #screen-app { background: var(--gray-50); }
+  .app-header { background: var(--gray-800); color: white; padding: 0 1.25rem; display: flex; align-items: center; justify-content: space-between; height: 56px; flex-shrink: 0; }
+  .app-header-brand { font-family: var(--font-display); font-size: 20px; color: white; display: flex; align-items: center; gap: 8px; }
+  .app-header-brand .logo-dot { width: 8px; height: 8px; background: var(--green-mid); border-radius: 50%; }
+  .code-pill { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: rgba(255,255,255,0.8); cursor: pointer; transition: background 0.2s; }
+  .code-pill:hover { background: rgba(255,255,255,0.2); }
+
+  .tab-bar { display: flex; background: var(--white); border-bottom: 1px solid var(--gray-100); padding: 0 0.5rem; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+  .tab-btn { flex: 1; padding: 13px 4px 10px; border: none; background: transparent; color: var(--gray-400); font-family: var(--font-body); font-size: 11px; font-weight: 500; cursor: pointer; transition: color 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; letter-spacing: 0.01em; }
+  .tab-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+  .tab-btn.active { color: var(--green); }
+  .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 2px; background: var(--green); border-radius: 2px 2px 0 0; }
+
+  .app-content { flex: 1; overflow-y: auto; }
+  .panel { display: none; padding: 1.25rem; animation: fadeIn 0.2s ease; }
+  .panel.active { display: block; }
+
+  .panel-title { font-family: var(--font-display); font-size: 22px; color: var(--gray-800); margin-bottom: 4px; }
+  .panel-sub { font-size: 13px; color: var(--gray-400); margin-bottom: 1.5rem; }
+
+  .card { background: var(--white); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; box-shadow: var(--shadow-sm); border: 1px solid var(--gray-100); }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; display: flex; align-items: center; gap: 6px; }
+  .card-title svg { width: 16px; height: 16px; stroke: var(--green); fill: none; stroke-width: 2; }
+
+  .field-label { font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 5px; display: block; }
+  .field-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 14px; font-family: var(--font-body); color: var(--gray-800); background: var(--white); outline: none; transition: border-color 0.2s; -webkit-appearance: none; }
+  .field-input:focus { border-color: var(--green); }
+  .field-input::placeholder { color: var(--gray-400); }
+  select.field-input { cursor: pointer; }
+  input[type=number].field-input::-webkit-inner-spin-button { opacity: 0.5; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mb-10 { margin-bottom: 10px; }
+  .mb-16 { margin-bottom: 16px; }
+
+  /* ── INGREDIENTES ── */
+  /* Header: Nombre | Precio | Unidad | Cant. | Costo | × */
+  .ing-header {
+    display: grid;
+    grid-template-columns: 2fr 1.1fr 0.85fr 0.85fr 0.9fr 28px;
+    gap: 6px;
+    font-size: 10px; font-weight: 600; color: var(--gray-400);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 6px; padding: 0 2px;
+  }
+  .ing-row {
+    display: grid;
+    grid-template-columns: 2fr 1.1fr 0.85fr 0.85fr 0.9fr 28px;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .ing-cost-display {
+    font-size: 12px; font-weight: 600;
+    color: var(--green-dark);
+    text-align: right;
+    padding-right: 2px;
+    white-space: nowrap;
+  }
+
+  .btn-rm { width: 28px; height: 28px; border: 1.5px solid var(--gray-200); border-radius: 50%; background: transparent; color: var(--gray-400); cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .btn-rm:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
+  .btn-add-ing { width: 100%; padding: 9px; border: 1.5px dashed var(--gray-200); border-radius: var(--radius-sm); background: transparent; color: var(--gray-400); font-size: 13px; font-family: var(--font-body); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; }
+  .btn-add-ing:hover { border-color: var(--green); color: var(--green); background: var(--green-light); }
+
+  /* UNIT REFERENCE BOX */
+  .unit-ref { font-size: 11px; color: var(--gray-400); background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; line-height: 1.7; }
+  .unit-ref strong { color: var(--gray-600); }
+
+  /* SLIDER */
+  .slider-wrap { display: flex; align-items: center; gap: 12px; }
+  .slider-wrap input[type=range] { flex: 1; height: 6px; -webkit-appearance: none; border-radius: 3px; background: var(--gray-200); outline: none; }
+  .slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--green); cursor: pointer; box-shadow: 0 2px 6px rgba(26,158,114,0.4); }
+  .slider-val { font-size: 18px; font-weight: 600; color: var(--green); min-width: 52px; text-align: right; }
+
+  /* RESULTADOS */
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .result-mini { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-sm); padding: 12px; }
+  .result-mini-label { font-size: 11px; color: var(--gray-400); font-weight: 500; margin-bottom: 4px; }
+  .result-mini-val { font-size: 18px; font-weight: 600; color: var(--gray-800); }
+  .result-main { background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%); border-radius: var(--radius); padding: 1.25rem; color: white; display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .result-main-label { font-size: 13px; opacity: 0.85; margin-bottom: 4px; }
+  .result-main-val { font-size: 32px; font-family: var(--font-display); }
+  .result-main-sub { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+  .result-main-icon svg { width: 48px; height: 48px; stroke: rgba(255,255,255,0.3); fill: none; stroke-width: 1.5; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* BREAKDOWN TABLE */
+  .breakdown-table { width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 12px; }
+  .breakdown-table td { padding: 5px 4px; }
+  .breakdown-table td:last-child { text-align: right; font-weight: 600; color: var(--gray-800); }
+  .breakdown-table .total-row td { border-top: 1px solid var(--gray-200); padding-top: 8px; font-weight: 700; color: var(--red); }
+
+  /* PRODUCTOS */
+  .products-empty { text-align: center; padding: 3rem 1rem; color: var(--gray-400); }
+  .products-empty svg { width: 56px; height: 56px; stroke: var(--gray-200); fill: none; stroke-width: 1.5; margin-bottom: 1rem; }
+  .product-item { background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.1s; cursor: pointer; }
+  .product-item:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .product-item-name { font-weight: 600; font-size: 15px; color: var(--gray-800); margin-bottom: 3px; }
+  .product-item-meta { font-size: 12px; color: var(--gray-400); }
+  .product-item-price { font-size: 20px; font-weight: 700; color: var(--green); font-family: var(--font-display); }
+  .product-item-margin { font-size: 11px; color: var(--gray-400); text-align: right; }
+  .product-detail { display: none; background: var(--white); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; border: 1px solid var(--gray-100); box-shadow: var(--shadow-sm); }
+  .product-detail.open { display: block; }
+
+  /* CALCULADORA RÁPIDA */
+  .quick-result { background: var(--amber-light); border: 1px solid #f0c84a; border-radius: var(--radius); padding: 1rem 1.25rem; margin-top: 1rem; display: none; }
+  .quick-result.show { display: block; }
+  .quick-result-label { font-size: 12px; color: #8a5c00; margin-bottom: 4px; font-weight: 500; }
+  .quick-result-val { font-size: 28px; font-weight: 700; color: #6b4400; font-family: var(--font-display); }
+
+  /* AJUSTES */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--gray-100); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; font-weight: 500; color: var(--gray-800); }
+  .setting-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+  .setting-val { font-size: 14px; font-weight: 600; color: var(--green); }
+
+  /* TOAST / MODAL */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--gray-800); color: white; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; z-index: 1000; transition: transform 0.3s ease; white-space: nowrap; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 999; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--white); border-radius: 20px; padding: 2rem; width: 100%; max-width: 360px; animation: fadeUp 0.3s ease; }
+  .modal h3 { font-family: var(--font-display); font-size: 22px; margin-bottom: 8px; }
+  .modal p { font-size: 14px; color: var(--gray-600); margin-bottom: 1.5rem; line-height: 1.6; }
+  .modal-code { font-size: 40px; font-weight: 800; letter-spacing: 0.2em; color: var(--green); text-align: center; background: var(--green-light); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.5rem; font-family: var(--font-body); }
+
+  .text-green { color: var(--green); }
+  .text-red { color: var(--red); }
+  .fw600 { font-weight: 600; }
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <div class="login-brand">PrecioCosto</div>
+        <div class="login-tagline">Fija precios con confianza</div>
+      </div>
+    </div>
+    <div class="login-label">Ingresa tu código de 4 dígitos</div>
+    <div class="pin-row">
+      <input class="pin-digit" id="p0" maxlength="1" type="tel" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+      <input class="pin-digit" id="p1" maxlength="1" type="tel" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+      <input class="pin-digit" id="p2" maxlength="1" type="tel" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+      <input class="pin-digit" id="p3" maxlength="1" type="tel" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    </div>
+    <div class="pin-error" id="pinError">⚠ Ingresa 4 dígitos numéricos.</div>
+    <button class="btn-primary mb-10" id="btnLogin">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Acceder
+    </button>
+    <div class="login-divider">o</div>
+    <button class="btn-secondary" id="btnNewCode" style="margin-top:10px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Crear código nuevo
+    </button>
+    <div class="login-footer">Tus datos se guardan localmente en este dispositivo.<br>Nadie más puede ver tu información.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app" class="screen">
+  <div class="app-header">
+    <div class="app-header-brand"><div class="logo-dot"></div>PrecioCosto</div>
+    <div class="code-pill" id="headerCode" title="Cambiar código">Código: ----</div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-panel="nueva">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M9 10h6"/><path d="M12 7v6"/></svg>
+      Nueva
+    </button>
+    <button class="tab-btn" data-panel="productos">
+      <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      Mis Precios
+    </button>
+    <button class="tab-btn" data-panel="rapida">
+      <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Rápida
+    </button>
+    <button class="tab-btn" data-panel="ajustes">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
+      Ajustes
+    </button>
+  </div>
+
+  <div class="app-content">
+
+    <!-- PANEL: NUEVA RECETA -->
+    <div class="panel active" id="panel-nueva">
+      <div class="panel-title">Calcular Precio</div>
+      <div class="panel-sub">Ingresa tus costos para saber cuánto cobrar</div>
+
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Nombre del producto
+        </div>
+        <input class="field-input" id="prodName" placeholder="ej: Empanadas (docena), Torta 20 personas...">
+      </div>
+
+      <!-- Ingredientes -->
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+          Ingredientes / Materiales
+        </div>
+        <!-- FIX #1 & #3: 6-column grid showing unit selector AND cost per ingredient -->
+        <div class="ing-header">
+          <span>Insumo</span>
+          <span>Precio/unidad</span>
+          <span>Unidad</span>
+          <span>Cantidad</span>
+          <span style="text-align:right">Costo</span>
+          <span></span>
+        </div>
+        <div id="ingList"></div>
+        <div class="unit-ref">
+          <strong>Referencia de unidades:</strong> Ingresa el precio de compra por la unidad seleccionada.<br>
+          Ej: Harina $900/kg · 500g → costo = $450 &nbsp;|&nbsp; Huevos $200/unidad · 3 → costo = $600
+        </div>
+        <button class="btn-add-ing" id="btnAddIng">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Agregar ingrediente
+        </button>
+      </div>
+
+      <!-- Costos indirectos -->
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          Costos Indirectos (CLP)
+        </div>
+        <div class="row2 mb-10">
+          <div>
+            <label class="field-label">Gas / Electricidad</label>
+            <input class="field-input" id="costEnergy" type="number" value="0" min="0" placeholder="0">
+          </div>
+          <div>
+            <label class="field-label">Embalaje / Envase</label>
+            <input class="field-input" id="costPack" type="number" value="0" min="0" placeholder="0">
+          </div>
+        </div>
+        <div>
+          <label class="field-label">Otros (arriendo proporcional, transporte, etc.)</label>
+          <input class="field-input" id="costOther" type="number" value="0" min="0" placeholder="0">
+        </div>
+      </div>
+
+      <!-- Mano de obra -->
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Mano de Obra
+        </div>
+        <div class="row2 mb-10">
+          <div>
+            <label class="field-label">Horas trabajadas</label>
+            <input class="field-input" id="costHours" type="number" value="0" min="0" step="0.5" placeholder="0">
+          </div>
+          <div>
+            <label class="field-label">Valor por hora (CLP)</label>
+            <input class="field-input" id="costRate" type="number" value="3000" min="0" placeholder="3000">
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--gray-400);line-height:1.5;">💡 Sueldo mínimo Chile ≈ $3.000/hr. Ajusta según tu valoración.</div>
+      </div>
+
+      <!-- Margen -->
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Margen de Ganancia
+        </div>
+        <div class="slider-wrap mb-10">
+          <input type="range" id="marginSlider" min="5" max="300" value="40" step="5">
+          <div class="slider-val" id="marginVal">40%</div>
+        </div>
+        <div id="marginHint" style="font-size:12px;color:var(--gray-400);line-height:1.5;"></div>
+      </div>
+
+      <!-- Resultados -->
+      <div class="card" id="resultCard">
+        <div class="card-title" style="margin-bottom:12px;">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Resultado
+        </div>
+        <!-- Desglose detallado de costos -->
+        <table class="breakdown-table">
+          <tbody id="breakdownBody">
+            <tr><td style="color:var(--gray-500);">Ingredientes</td><td id="rIng">$0</td></tr>
+            <tr><td style="color:var(--gray-500);">Costos indirectos</td><td id="rInd">$0</td></tr>
+            <tr><td style="color:var(--gray-500);">Mano de obra</td><td id="rLab">$0</td></tr>
+            <tr class="total-row"><td>Costo total</td><td id="rCost">$0</td></tr>
+          </tbody>
+        </table>
+        <div class="result-main">
+          <div>
+            <div class="result-main-label">Precio de venta sugerido</div>
+            <div class="result-main-val" id="rPrice">$0</div>
+            <div class="result-main-sub" id="rSub">Margen 40% · Ganancia: $0</div>
+          </div>
+          <div class="result-main-icon">
+            <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" id="btnSave">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Guardar
+          </button>
+          <button class="btn-secondary" id="btnClear">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.35"/></svg>
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: MIS PRODUCTOS -->
+    <div class="panel" id="panel-productos">
+      <div class="panel-title">Mis Productos</div>
+      <div class="panel-sub" id="prodCount">Cargando...</div>
+      <div id="productsList"></div>
+    </div>
+
+    <!-- PANEL: CALCULADORA RÁPIDA -->
+    <div class="panel" id="panel-rapida">
+      <div class="panel-title">Calculadora Rápida</div>
+      <div class="panel-sub">Calcula un precio al instante sin guardar</div>
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Datos básicos
+        </div>
+        <div class="mb-16">
+          <label class="field-label">Costo total del producto (CLP)</label>
+          <input class="field-input" id="qCost" type="number" placeholder="ej: 5000" min="0">
+        </div>
+        <div class="mb-16">
+          <label class="field-label">Margen de ganancia deseado</label>
+          <div class="slider-wrap">
+            <input type="range" id="qMargin" min="5" max="300" value="40" step="5">
+            <div class="slider-val" id="qMarginVal">40%</div>
+          </div>
+        </div>
+        <div class="mb-16">
+          <label class="field-label">Número de unidades producidas</label>
+          <input class="field-input" id="qUnits" type="number" placeholder="ej: 12" min="1" value="1">
+        </div>
+        <button class="btn-primary" id="btnCalcRapida">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Calcular ahora
+        </button>
+        <div class="quick-result" id="quickResult">
+          <div class="result-grid" style="margin-bottom:8px;">
+            <div class="result-mini"><div class="result-mini-label">Precio por unidad</div><div class="result-mini-val text-green fw600" id="qPriceUnit">$0</div></div>
+            <div class="result-mini"><div class="result-mini-label">Ganancia por unidad</div><div class="result-mini-val text-green fw600" id="qGainUnit">$0</div></div>
+            <div class="result-mini"><div class="result-mini-label">Costo por unidad</div><div class="result-mini-val" id="qCostUnit">$0</div></div>
+            <div class="result-mini"><div class="result-mini-label">Ganancia total</div><div class="result-mini-val fw600" id="qGainTotal">$0</div></div>
+          </div>
+          <div class="quick-result-label">Precio de venta total (todas las unidades)</div>
+          <div class="quick-result-val" id="qPriceTotal">$0</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Referencia de Márgenes
+        </div>
+        <div style="font-size:13px;color:var(--gray-600);line-height:2.2;">
+          <div class="flex-between"><span>⚠️ Mínimo recomendado</span><span class="fw600">30%</span></div>
+          <div class="flex-between"><span>✅ Feria / venta directa</span><span class="fw600">40–60%</span></div>
+          <div class="flex-between"><span>💪 Tiendas / intermediarios</span><span class="fw600">80–120%</span></div>
+          <div class="flex-between"><span>🚀 Artesanía / alto valor</span><span class="fw600">150–300%</span></div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--gray-400);line-height:1.6;">
+          El margen se calcula <strong>sobre el costo</strong>. Un margen del 40% sobre un costo de $1.000 → precio de venta = $1.400.
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: AJUSTES -->
+    <div class="panel" id="panel-ajustes">
+      <div class="panel-title">Ajustes</div>
+      <div class="panel-sub">Configura tu experiencia</div>
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
+          Mi cuenta
+        </div>
+        <div class="setting-row"><div><div class="setting-label">Código de acceso</div><div class="setting-sub">Tu identificador personal</div></div><div class="setting-val" id="settingCode">----</div></div>
+        <div class="setting-row"><div><div class="setting-label">Productos guardados</div><div class="setting-sub">En este dispositivo</div></div><div class="setting-val" id="settingCount">0</div></div>
+        <div class="setting-row">
+          <div><div class="setting-label">Valor hora predeterminado</div><div class="setting-sub">Para nuevas recetas</div></div>
+          <input class="field-input" id="settingRate" type="number" value="3000" style="width:110px;text-align:right;">
+        </div>
+        <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
+          <button class="btn-secondary" id="btnExport">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar mis productos (texto)
+          </button>
+          <button class="btn-secondary" id="btnDeleteAll" style="border-color:#f5c4b3;color:var(--red);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Borrar todos los datos
+          </button>
+          <button class="btn-secondary" id="btnLogout">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Acerca de PrecioCosto
+        </div>
+        <div style="font-size:13px;color:var(--gray-600);line-height:1.8;">
+          <div>Versión 1.1 — Offline · Cálculos verificados</div>
+          <div>Hecho para emprendedores chilenos 🇨🇱</div>
+          <div>Todos los datos se guardan localmente en tu dispositivo.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL CÓDIGO NUEVO -->
+<div class="modal-overlay" id="modalNewCode">
+  <div class="modal">
+    <h3>Tu nuevo código</h3>
+    <p>Guarda este código en un lugar seguro. Lo necesitarás para acceder a tus productos en el futuro.</p>
+    <div class="modal-code" id="modalCodeVal">0000</div>
+    <button class="btn-primary" id="btnModalOk">Entendido, entrar →</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">Guardado</div>
+
+<script>
+/* ═══════════════════
+   ESTADO GLOBAL
+═══════════════════ */
+let currentCode = null;
+let products    = [];
+let ingredients = [newIng()];
+
+function newIng() {
+  return { name: '', price: '', unit: 'kg', qty: '' };
+}
+
+/* ═══════════════════
+   UTILIDADES
+═══════════════════ */
+const $ = id => document.getElementById(id);
+const clp = n => '$' + Math.round(n).toLocaleString('es-CL');
+
+function toast(msg, dur = 2400) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function storageKey(code) { return 'preciocosto_v2_' + code; }
+
+function saveData() {
+  if (!currentCode) return;
+  const rate = parseInt($('settingRate').value) || 3000;
+  localStorage.setItem(storageKey(currentCode), JSON.stringify({ products, rate }));
+  $('settingCount').textContent = products.length;
+}
+
+function loadData() {
+  if (!currentCode) return;
+  const raw = localStorage.getItem(storageKey(currentCode));
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      products = data.products || [];
+      const rate = data.rate || 3000;
+      $('costRate').value   = rate;
+      $('settingRate').value = rate;
+    } catch(e) { products = []; }
+  } else {
+    products = [];
+  }
+  $('settingCount').textContent = products.length;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FIX #1 — calcIngCost: usa correctamente la unidad
+   
+   Lógica por unidad:
+   - kg  : precio ingresado es por kg.   costo = precio × (qty / 1)    [qty en kg]
+   - g   : precio ingresado es por kg.   costo = precio × (qty / 1000) [qty en g]
+   - l   : precio ingresado es por litro. costo = precio × (qty / 1)   [qty en l]
+   - ml  : precio ingresado es por litro. costo = precio × (qty / 1000)[qty en ml]
+   - und : precio ingresado es por unidad. costo = precio × qty
+   
+   Así el campo "Precio/unidad" siempre se interpreta por la unidad BASE
+   y la cantidad usa esa misma unidad (g→divido por 1000, ml→divido por 1000).
+═══════════════════════════════════════════════════════ */
+function calcIngCost(ing) {
+  const p = parseFloat(ing.price) || 0;
+  const q = parseFloat(ing.qty)   || 0;
+  if (p === 0 || q === 0) return 0;
+
+  switch (ing.unit) {
+    case 'kg':  return p * q;           // precio/kg  × cant.en kg
+    case 'g':   return p * (q / 1000);  // precio/kg  × cant.en g ÷ 1000
+    case 'l':   return p * q;           // precio/l   × cant.en l
+    case 'ml':  return p * (q / 1000);  // precio/l   × cant.en ml ÷ 1000
+    case 'und': return p * q;           // precio/und × cant.
+    default:    return p * q;
+  }
+}
+
+/* placeholder label que aparece en el input precio según unidad */
+function pricePlaceholder(unit) {
+  switch (unit) {
+    case 'kg':  return 'CLP/kg';
+    case 'g':   return 'CLP/kg';
+    case 'l':   return 'CLP/litro';
+    case 'ml':  return 'CLP/litro';
+    case 'und': return 'CLP/und';
+    default:    return 'Precio';
+  }
+}
+
+/* ═══════════════════
+   RENDER INGREDIENTES
+═══════════════════ */
+/* FIX #3 — cada fila muestra la columna de costo calculado (.ing-cost-display) */
+function renderIngredients() {
+  const list = $('ingList');
+  list.innerHTML = '';
+  ingredients.forEach((ing, i) => {
+    const cost = calcIngCost(ing);
+    const row  = document.createElement('div');
+    row.className = 'ing-row';
+    row.dataset.idx = i;
+    row.innerHTML = `
+      <input class="field-input" style="font-size:12px;padding:7px 8px;"
+             placeholder="Harina, azúcar..." value="${ing.name}"
+             data-f="name" data-i="${i}">
+      <input class="field-input" style="font-size:12px;padding:7px 6px;"
+             placeholder="${pricePlaceholder(ing.unit)}" type="number" min="0"
+             value="${ing.price}" data-f="price" data-i="${i}">
+      <select class="field-input" style="font-size:12px;padding:7px 4px;"
+              data-f="unit" data-i="${i}">
+        <option value="kg"  ${ing.unit==='kg' ?'selected':''}>kg</option>
+        <option value="g"   ${ing.unit==='g'  ?'selected':''}>g</option>
+        <option value="l"   ${ing.unit==='l'  ?'selected':''}>l</option>
+        <option value="ml"  ${ing.unit==='ml' ?'selected':''}>ml</option>
+        <option value="und" ${ing.unit==='und'?'selected':''}>und</option>
+      </select>
+      <input class="field-input" style="font-size:12px;padding:7px 6px;"
+             placeholder="Cant." type="number" min="0"
+             value="${ing.qty}" data-f="qty" data-i="${i}">
+      <div class="ing-cost-display" data-cost="${i}">${clp(cost)}</div>
+      <button class="btn-rm" data-rm="${i}" title="Eliminar">×</button>
+    `;
+
+    /* live update: recalculate on any field change */
+    row.querySelectorAll('[data-f]').forEach(el => {
+      el.addEventListener('change', e => updateIngField(i, e.target.dataset.f, e.target.value));
+      el.addEventListener('input',  e => updateIngField(i, e.target.dataset.f, e.target.value));
+    });
+
+    row.querySelector('[data-rm]').addEventListener('click', () => {
+      if (ingredients.length > 1) ingredients.splice(i, 1);
+      else ingredients[0] = newIng();
+      renderIngredients();
+      updateCalc();
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function updateIngField(i, field, value) {
+  ingredients[i][field] = value;
+  /* update just the cost cell for this row without full re-render */
+  const costEl = $('ingList').querySelector(`[data-cost="${i}"]`);
+  if (costEl) costEl.textContent = clp(calcIngCost(ingredients[i]));
+  /* if unit changed, update price placeholder */
+  if (field === 'unit') {
+    const priceInput = $('ingList').querySelector(`[data-f="price"][data-i="${i}"]`);
+    if (priceInput) priceInput.placeholder = pricePlaceholder(value);
+  }
+  updateCalc();
+}
+
+$('btnAddIng').addEventListener('click', () => {
+  ingredients.push(newIng());
+  renderIngredients();
+  $('ingList').lastElementChild?.querySelector('input')?.focus();
+});
+
+/* ═══════════════════
+   CÁLCULO PRINCIPAL
+═══════════════════ */
+function calcAll() {
+  const ingCost  = ingredients.reduce((s, ing) => s + calcIngCost(ing), 0);
+  const energy   = parseFloat($('costEnergy').value) || 0;
+  const pack     = parseFloat($('costPack').value)   || 0;
+  const other    = parseFloat($('costOther').value)  || 0;
+  const hours    = parseFloat($('costHours').value)  || 0;
+  const rate     = parseFloat($('costRate').value)   || 3000;
+  const margin   = parseFloat($('marginSlider').value) || 40;
+
+  const labor    = hours * rate;
+  const indirect = energy + pack + other;
+  const total    = ingCost + indirect + labor;
+
+  /* price = cost × (1 + margin%) — margen SOBRE el costo, no sobre el precio */
+  const price    = total * (1 + margin / 100);
+  const profit   = price - total;
+
+  return { ingCost, indirect, labor, total, price, profit, margin, energy, pack, other, hours, rate };
+}
+
+function updateCalc() {
+  const r = calcAll();
+  $('rIng').textContent  = clp(r.ingCost);
+  $('rInd').textContent  = clp(r.indirect);
+  $('rLab').textContent  = clp(r.labor);
+  $('rCost').textContent = clp(r.total);
+  $('rPrice').textContent = clp(r.price);
+  $('rSub').textContent  = `Margen ${r.margin}% · Ganancia: ${clp(r.profit)}`;
+  updateMarginHint(r.margin);
+}
+
+function updateMarginHint(m) {
+  let hint = '';
+  if (m < 30)       hint = '⚠️ Margen muy bajo. Podrías no cubrir todos tus costos reales.';
+  else if (m < 50)  hint = '✅ Buen margen para ventas directas y ferias.';
+  else if (m < 100) hint = '💪 Margen saludable. Ideal si vendes a tiendas o distribuidores.';
+  else              hint = '🚀 Margen alto. Asegúrate que el mercado lo acepte.';
+  $('marginHint').textContent = hint;
+}
+
+['costEnergy','costPack','costOther','costHours','costRate'].forEach(id => {
+  $(id).addEventListener('input', updateCalc);
+});
+$('marginSlider').addEventListener('input', () => {
+  $('marginVal').textContent = $('marginSlider').value + '%';
+  updateCalc();
+});
+
+/* ═══════════════════
+   GUARDAR / LIMPIAR
+═══════════════════ */
+$('btnSave').addEventListener('click', () => {
+  const r = calcAll();
+  const name = $('prodName').value.trim() || 'Producto sin nombre';
+  products.unshift({
+    id:         Date.now(),
+    name,
+    ingCost:    r.ingCost,
+    energy:     r.energy,
+    pack:       r.pack,
+    other:      r.other,
+    indirect:   r.indirect,
+    labor:      r.labor,
+    hours:      r.hours,
+    rate:       r.rate,     /* FIX #4: guardar tasa original */
+    total:      r.total,
+    price:      r.price,
+    margin:     r.margin,
+    profit:     r.profit,
+    ingredients: JSON.parse(JSON.stringify(ingredients)),
+    date:       new Date().toLocaleDateString('es-CL')
+  });
+  saveData();
+  toast('✅ "' + name + '" guardado');
+  clearCalc();
+  document.querySelector('[data-panel="productos"]').click();
+});
+
+function clearCalc() {
+  $('prodName').value = '';
+  ingredients = [newIng()];
+  ['costEnergy','costPack','costOther','costHours'].forEach(id => $(id).value = 0);
+  $('costRate').value = parseInt($('settingRate').value) || 3000;
+  $('marginSlider').value = 40;
+  $('marginVal').textContent = '40%';
+  renderIngredients();
+  updateCalc();
+}
+$('btnClear').addEventListener('click', () => { if (confirm('¿Limpiar todos los campos?')) clearCalc(); });
+
+/* ═══════════════════════════════════════════════
+   FIX #2 & #4 — loadProductIntoCalc
+   Restaura cada campo indirecto por separado
+   y usa la tasa ORIGINAL guardada con el producto
+═══════════════════════════════════════════════ */
+function loadProductIntoCalc(i) {
+  const p = products[i];
+  $('prodName').value    = p.name;
+  ingredients            = JSON.parse(JSON.stringify(p.ingredients));
+  if (!ingredients.length) ingredients = [newIng()];
+
+  /* FIX #2: restore each indirect cost individually */
+  $('costEnergy').value  = p.energy  ?? p.indirect ?? 0;
+  $('costPack').value    = p.pack    ?? 0;
+  $('costOther').value   = p.other   ?? 0;
+
+  /* FIX #4: use the saved hourly rate, not the current setting */
+  $('costRate').value    = p.rate    ?? parseInt($('settingRate').value) ?? 3000;
+  $('costHours').value   = p.hours   ?? 0;
+
+  $('marginSlider').value = p.margin;
+  $('marginVal').textContent = p.margin + '%';
+  renderIngredients();
+  updateCalc();
+  document.querySelector('[data-panel="nueva"]').click();
+  toast('📝 "' + p.name + '" cargado para editar');
+}
+
+/* ═══════════════════
+   RENDER PRODUCTOS
+═══════════════════ */
+function renderProducts() {
+  const list = $('productsList');
+  const sub  = $('prodCount');
+  list.innerHTML = '';
+  if (!products.length) {
+    sub.textContent = 'Aún no tienes productos guardados';
+    list.innerHTML = `<div class="products-empty">
+      <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      <p>Calcula un precio y presiona<br><strong>Guardar</strong> para verlo aquí.</p>
+    </div>`;
+    return;
+  }
+  sub.textContent = products.length + ' producto' + (products.length !== 1 ? 's' : '') + ' guardados';
+
+  products.forEach((p, i) => {
+    const wrap = document.createElement('div');
+    const ingRows = (p.ingredients || []).filter(g => g.name)
+      .map(g => `<div class="flex-between" style="padding:2px 0;font-size:12px;">
+        <span style="color:var(--gray-600);">${g.name} (${g.qty}${g.unit})</span>
+        <span style="color:var(--gray-800);font-weight:600;">${clp(calcIngCost(g))}</span>
+      </div>`).join('');
+
+    wrap.innerHTML = `
+      <div class="product-item" data-i="${i}">
+        <div>
+          <div class="product-item-name">${p.name}</div>
+          <div class="product-item-meta">Costo: ${clp(p.total)} · ${p.date}</div>
+        </div>
+        <div>
+          <div class="product-item-price">${clp(p.price)}</div>
+          <div class="product-item-margin">${p.margin}% margen</div>
+        </div>
+      </div>
+      <div class="product-detail" id="det-${p.id}">
+        <div class="result-grid" style="margin-bottom:12px;">
+          <div class="result-mini"><div class="result-mini-label">Ingredientes</div><div class="result-mini-val">${clp(p.ingCost)}</div></div>
+          <div class="result-mini"><div class="result-mini-label">Costos indirectos</div><div class="result-mini-val">${clp(p.indirect)}</div></div>
+          <div class="result-mini"><div class="result-mini-label">Mano de obra</div><div class="result-mini-val">${clp(p.labor)}</div></div>
+          <div class="result-mini"><div class="result-mini-label">Ganancia</div><div class="result-mini-val text-green">${clp(p.profit ?? (p.price - p.total))}</div></div>
+        </div>
+        ${ingRows ? `<div style="border-top:1px solid var(--gray-100);padding-top:10px;margin-bottom:12px;">${ingRows}</div>` : ''}
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary btn-load-prod" data-i="${i}" style="flex:1;font-size:13px;padding:9px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editar / Recalcular
+          </button>
+          <button class="btn-secondary btn-del-prod" data-i="${i}" style="flex:1;font-size:13px;padding:9px;border-color:#f5c4b3;color:var(--red);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Eliminar
+          </button>
+        </div>
+      </div>`;
+
+    list.appendChild(wrap);
+    wrap.querySelector('.product-item').addEventListener('click', () => {
+      $('det-' + p.id).classList.toggle('open');
+    });
+    wrap.querySelector('.btn-del-prod').addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(e.currentTarget.dataset.i);
+      if (confirm('¿Eliminar "' + products[idx].name + '"?')) {
+        products.splice(idx, 1);
+        saveData();
+        renderProducts();
+        toast('🗑 Producto eliminado');
+      }
+    });
+    wrap.querySelector('.btn-load-prod').addEventListener('click', e => {
+      e.stopPropagation();
+      loadProductIntoCalc(parseInt(e.currentTarget.dataset.i));
+    });
+  });
+}
+
+/* ═══════════════════
+   CALCULADORA RÁPIDA
+═══════════════════ */
+$('qMargin').addEventListener('input', () => {
+  $('qMarginVal').textContent = $('qMargin').value + '%';
+});
+
+$('btnCalcRapida').addEventListener('click', () => {
+  const cost   = parseFloat($('qCost').value)   || 0;
+  const margin = parseFloat($('qMargin').value)  || 40;
+  const units  = Math.max(1, parseFloat($('qUnits').value) || 1);
+  if (cost <= 0) { toast('⚠ Ingresa un costo mayor a 0'); return; }
+
+  const priceTotal = cost * (1 + margin / 100);
+  const costUnit   = cost / units;
+  const priceUnit  = priceTotal / units;
+  const gainUnit   = priceUnit - costUnit;
+  const gainTotal  = priceTotal - cost;
+
+  $('qCostUnit').textContent   = clp(costUnit);
+  $('qPriceUnit').textContent  = clp(priceUnit);
+  $('qGainUnit').textContent   = clp(gainUnit);
+  $('qGainTotal').textContent  = clp(gainTotal);
+  $('qPriceTotal').textContent = clp(priceTotal);
+  $('quickResult').classList.add('show');
+});
+
+/* ═══════════════════
+   AJUSTES
+═══════════════════ */
+$('settingRate').addEventListener('input', () => {
+  $('costRate').value = $('settingRate').value;
+  saveData();
+});
+
+$('btnDeleteAll').addEventListener('click', () => {
+  if (confirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer.')) {
+    products = [];
+    saveData();
+    renderProducts();
+    toast('🗑 Datos eliminados');
+  }
+});
+
+$('btnExport').addEventListener('click', () => {
+  if (!products.length) { toast('No hay productos para exportar'); return; }
+  let text = 'PRECIOCOSTO — Mis Productos\n================================\n\n';
+  products.forEach(p => {
+    text += `${p.name}\n`;
+    text += `  Precio de venta : ${clp(p.price)}\n`;
+    text += `  Costo total     : ${clp(p.total)}\n`;
+    text += `  Ganancia        : ${clp(p.profit ?? (p.price - p.total))}\n`;
+    text += `  Margen          : ${p.margin}%\n`;
+    text += `  Ingredientes    : ${clp(p.ingCost)}\n`;
+    text += `  Costos indir.   : ${clp(p.indirect)}\n`;
+    text += `  Mano de obra    : ${clp(p.labor)}\n`;
+    text += `  Guardado        : ${p.date}\n\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = 'preciocosto-productos.txt';
+  a.click();
+  toast('📄 Archivo descargado');
+});
+
+/* ═══════════════════
+   LOGIN
+═══════════════════ */
+['p0','p1','p2','p3'].forEach((id, i, arr) => {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    el.value = el.value.replace(/\D/g,'').slice(-1);
+    if (el.value && i < arr.length - 1) $(arr[i+1]).focus();
+  });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !el.value && i > 0) $(arr[i-1]).focus();
+    if (e.key === 'Enter') $('btnLogin').click();
+  });
+});
+
+$('btnLogin').addEventListener('click', () => {
+  const code = ['p0','p1','p2','p3'].map(id => $(id).value).join('');
+  if (!/^\d{4}$/.test(code)) { $('pinError').style.display='block'; return; }
+  $('pinError').style.display='none';
+  enterApp(code);
+});
+
+$('btnNewCode').addEventListener('click', () => {
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  $('modalCodeVal').textContent = code;
+  $('modalNewCode').classList.add('open');
+  $('btnModalOk')._code = code;
+});
+$('btnModalOk').addEventListener('click', function() {
+  $('modalNewCode').classList.remove('open');
+  enterApp(this._code);
+});
+
+function enterApp(code) {
+  currentCode = code;
+  $('screen-login').classList.remove('active');
+  $('screen-app').classList.add('active');
+  $('headerCode').textContent  = 'Código: ' + code;
+  $('settingCode').textContent = code;
+  loadData();
+  renderIngredients();
+  updateCalc();
+  renderProducts();
+}
+
+$('headerCode').addEventListener('click', () => {
+  if (confirm('¿Cambiar de código? Asegúrate de recordar el actual para volver a tus datos.')) logout();
+});
+$('btnLogout').addEventListener('click', () => { if (confirm('¿Cerrar sesión?')) logout(); });
+
+function logout() {
+  currentCode = null;
+  products    = [];
+  $('screen-app').classList.remove('active');
+  $('screen-login').classList.add('active');
+  ['p0','p1','p2','p3'].forEach(id => $(id).value = '');
+  $('p0').focus();
+  clearCalc();
+}
+
+/* TABS */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('panel-' + btn.dataset.panel).classList.add('active');
+    if (btn.dataset.panel === 'productos') renderProducts();
+  });
+});
+
+/* INIT */
+renderIngredients();
+updateCalc();
+$('p0').focus();
+</script>
+</body>
+</html>
