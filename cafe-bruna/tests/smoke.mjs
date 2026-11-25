@@ -1,4 +1,4 @@
-// Pruebas de humo de la app Café de Bruna (cafe-bruna/index.html).
+// Pruebas de humo de la app Café de Bruna (cafe-bruna/index.html y js/*.js).
 // Uso:  cd cafe-bruna/tests && npm install && npx playwright install chromium && npm test
 // Con un Chrome ya instalado:  CHROME_PATH="/ruta/a/chrome" npm test
 // GitHub se simula: nunca se llama a la API real.
@@ -6,9 +6,20 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import http from 'node:http';
+import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const URL = 'file://' + path.resolve(here, '../index.html');
+// Los módulos ES no cargan desde file://, así que se sirve la carpeta cafe-bruna/ por HTTP local
+const root = path.resolve(here, '..');
+const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(new globalThis.URL(req.url, 'http://x').pathname); const f = path.join(root, rel.endsWith('/') ? rel + 'index.html' : rel);
+  if (!f.startsWith(root) || f.includes('node_modules') || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'content-type': TIPOS[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const URL = 'http://127.0.0.1:' + server.address().port + '/index.html';
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: esperado ≈${b}, obtenido ${a}`);
 let passed = 0;
 const test = async (name, fn) => { await fn(); passed++; console.log('✔', name); };
@@ -133,4 +144,4 @@ try {
   console.log(`\n${passed} pruebas OK`);
 } catch (e) {
   console.error('✘', e.message); process.exitCode = 1;
-} finally { await browser.close(); }
+} finally { await browser.close(); server.close(); }
