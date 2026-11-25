@@ -28,3 +28,6 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ═══════════════ INICIO ═══════════════ */
 render();
 if (UI.unlocked && ghCfg()) sync();
+
+/* PWA: service worker (solo en http/https; en file:// no existe) */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker no registrado:', e));

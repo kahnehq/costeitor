@@ -34,6 +34,16 @@ Reglas de la división (pensadas para poder envolver la app en una APK u otro co
 - El acceso a `localStorage` está en `estado.js` (datos), `sync.js` (configuración de GitHub) y `pin.js` (PIN). Un contenedor nuevo debería reemplazar solo esos puntos.
 - Los módulos se importan en ciclo (render ↔ paneles ↔ acciones). Es seguro mientras el código de nivel superior no llame a funciones de otro módulo al cargarse; hazlo solo dentro de funciones.
 
+## PWA (instalable en Edge)
+
+Archivos: `manifest.webmanifest`, `sw.js` e `icons/` (SVG fuente + PNG 192, 512 y maskable). `main.js` registra el service worker solo en http/https. Edge ofrece "Instalar aplicación" desde el menú ⋯ → Aplicaciones, o el ícono de la barra de direcciones.
+
+- `sw.js` solo maneja GET **del mismo origen**. Todo lo demás (**`api.github.com`**, Google Fonts) pasa directo a la red y nunca se cachea. No cambies eso: por ahí viajan el token y los datos del café.
+- La caché guarda solo código y estilos. Los datos viven en `localStorage`.
+- Estrategia: red primero, caché de respaldo. Tras un merge la app se actualiza sola con conexión; sin conexión abre la última versión.
+- **Si agregas o renombras un archivo** de la app, agrégalo a `ARCHIVOS` en `sw.js` (una prueba lo exige) y sube `CACHE` (`bruna-app-vN`).
+- Los íconos se hicieron con el SVG de la taza; si cambias `icons/*.svg`, regenera los PNG.
+
 ## Modelo de datos (versión 4, `D.v === 4`)
 
 Se guarda en `localStorage['bruna.data.v1']`. El nombre de la clave no cambia entre versiones; la versión real está en `D.v`.
@@ -135,6 +145,5 @@ npm test
 ## Pendientes y siguientes pasos
 
 - Completar precios de insumos en $0 (leche, vasos, tapas, azúcar, preparado de helado por ml) y las recetas de cappuccino, latte y helado. Son datos de Carlos, no del código.
-- PWA: `manifest.webmanifest` + service worker para instalarla y usarla sin conexión en Edge y el celular. Si se agrega, el SW no debe cachear las llamadas a `api.github.com`.
 - Mostrar conflictos de sincronización (hoy gana el último en escribir, en silencio).
 - Ventas por día de la semana y por temporada (verano en la costa) en la pestaña Mes.

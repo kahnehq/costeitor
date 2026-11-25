@@ -204,6 +204,35 @@ try {
     await c5.close();
   });
 
+  await test('PWA: manifest, íconos, service worker, sin caché de api.github.com y uso sin conexión', async () => {
+    const { ctx: c6, page: p6, errors: e6 } = await newPage(browser);
+    await p6.goto(URL);
+    // manifest e íconos
+    const man = await p6.evaluate(async () => { const r = await fetch(document.querySelector('link[rel=manifest]').href); return r.json(); });
+    assert.equal(man.display, 'standalone'); assert.ok(man.name && man.short_name && man.start_url && man.scope);
+    for (const sz of ['192x192', '512x512']) assert.ok(man.icons.some(i => i.sizes === sz && i.type === 'image/png'), 'ícono ' + sz);
+    assert.ok(man.icons.some(i => i.purpose === 'maskable'), 'ícono maskable');
+    for (const i of man.icons) assert.equal(await p6.evaluate(async src => (await fetch(src)).status, i.src), 200, i.src);
+    // el service worker precachea TODOS los módulos (si agregas uno y no lo listas, esta prueba falla)
+    const swTxt = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+    for (const f of [...fs.readdirSync(path.join(root, 'js')).map(f => 'js/' + f), 'index.html', 'styles.css', 'manifest.webmanifest']) assert.ok(swTxt.includes("'./" + f + "'"), 'sw.js no lista ' + f);
+    await p6.evaluate(() => navigator.serviceWorker.ready);
+    await p6.reload(); // ahora la página queda controlada por el service worker
+    await p6.waitForFunction(() => navigator.serviceWorker.controller);
+    const cacheadas = await p6.evaluate(async () => { const out = []; for (const k of await caches.keys()) out.push(...(await (await caches.open(k)).keys()).map(r => r.url)); return out; });
+    assert.ok(cacheadas.some(u => u.endsWith('/js/costeo.js')) && cacheadas.some(u => u.endsWith('/index.html')), 'los archivos de la app están en caché');
+    // una llamada a api.github.com NO pasa por la caché
+    await p6.evaluate(() => fetch('https://api.github.com/repos/kahnehq/cafe-bruna-datos/contents/data/cafe-bruna.json', { headers: { Authorization: 'Bearer TEST' } }).catch(() => 0));
+    const despues = await p6.evaluate(async () => { const out = []; for (const k of await caches.keys()) out.push(...(await (await caches.open(k)).keys()).map(r => r.url)); return out; });
+    assert.deepEqual(despues.filter(u => !u.startsWith(URL.replace('/index.html', ''))), [], 'solo se cachean archivos del propio origen');
+    // sin conexión la app abre igual
+    await c6.setOffline(true);
+    await p6.reload();
+    assert.equal(await p6.locator('.wiz-title').innerText(), 'Bienvenido', 'abre sin conexión');
+    assert.deepEqual(e6, []);
+    await c6.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
   assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);
