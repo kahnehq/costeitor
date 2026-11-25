@@ -25,6 +25,7 @@ let passed = 0;
 const test = async (name, fn) => { await fn(); passed++; console.log('✔', name); };
 
 // GitHub simulado (API de contenidos): guarda el último PUT en memoria
+const nativos = [];
 const gh = { content: null, sha: null, puts: 0 };
 async function mockGitHub(ctx) {
   await ctx.route('https://fonts.googleapis.com/**', r => r.abort());
@@ -46,7 +47,7 @@ async function newPage(browser, viewport = { width: 1100, height: 900 }) {
   const ctx = await browser.newContext({ viewport }); await mockGitHub(ctx);
   const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept());
+  page.on('dialog', d => { nativos.push(d.message()); d.dismiss(); }); // la app ya no debe usar confirm()
   return { ctx, page, errors };
 }
 
@@ -91,7 +92,7 @@ try {
     await page.click('[data-act=tab][data-k=gastos]'); await page.click('[data-act=gNew]');
     await page.click('[data-act=gCat][data-k=cafe]'); await page.click('.item-btn:has-text("Café en grano")');
     await page.fill('[data-bind="g::cant:dec"]', '2'); await page.click('[data-act=gSave]');
-    await page.click('[data-act=loadFixed]');
+    await page.click('[data-act=loadFixed]'); await page.click('.dlg-actions .btn-primary');
     const r = await page.evaluate(() => { const x = real(thisMonth()); return { kg: x.granoKg, n: x.exps.length, cafe: x.cats.cafe.bruto }; });
     assert.equal(r.kg, 2); assert.equal(r.cafe, 50000); assert.equal(r.n, 5);
   });
@@ -172,7 +173,39 @@ try {
     await c4.close();
   });
 
+  await test('diálogos propios: cancelar, Esc, confirmar y borrado total con palabra', async () => {
+    const { ctx: c5, page: p5, errors: e5 } = await newPage(browser, { width: 390, height: 844 });
+    await p5.goto(URL);
+    for (let i = 0; i < 6; i++) await p5.click('[data-act=wNext]');
+    await p5.click('[data-act=tab][data-k=gastos]'); await p5.click('[data-act=gNew]');
+    await p5.click('[data-act=gCat][data-k=otros]'); await p5.click('.item-btn:has-text("Otro")');
+    await p5.fill('[data-bind="g::concepto:text"]', 'Prueba'); await p5.fill('[data-bind="g::monto:clp"]', '1000'); await p5.click('[data-act=gSave]');
+    const vivos = () => p5.evaluate(() => D.expenses.filter(e => !e.deleted).length);
+    assert.equal(await vivos(), 1);
+    await p5.click('[data-act=gEdit]'); await p5.click('[data-act=gDel]');
+    assert.equal(await p5.locator('.dlg h3').innerText(), 'Eliminar gasto');
+    const caja = await p5.locator('.dlg').boundingBox();
+    near(caja.y + caja.height, 844, 1, 'a 390 px el diálogo es una hoja pegada abajo');
+    assert.equal(await p5.evaluate(() => document.activeElement.textContent), 'Cancelar', 'en acciones peligrosas el foco parte en Cancelar');
+    await p5.click('.dlg-actions .btn-secondary');
+    assert.equal(await p5.locator('.dlg').count(), 0); assert.equal(await vivos(), 1, 'cancelar no borra');
+    await p5.click('[data-act=gDel]'); await p5.keyboard.press('Escape');
+    assert.equal(await p5.locator('.dlg').count(), 0); assert.equal(await vivos(), 1, 'Esc cancela y no cierra el formulario de gasto');
+    assert.equal(await p5.locator('.modal').count(), 1);
+    await p5.click('[data-act=gDel]'); await p5.click('.dlg-actions .btn-primary');
+    assert.equal(await vivos(), 0, 'confirmar elimina');
+    // borrado total: exige escribir BORRAR
+    await p5.evaluate('void ACTS.wipe()');
+    assert.equal(await p5.locator('.dlg-actions .btn-primary').isDisabled(), true);
+    await p5.fill('.dlg input', 'borra'); assert.equal(await p5.locator('.dlg-actions .btn-primary').isDisabled(), true);
+    await p5.fill('.dlg input', 'borrar'); await p5.click('.dlg-actions .btn-primary');
+    assert.equal(await p5.evaluate('S().setupDone'), false, 'los datos se reinician');
+    assert.deepEqual(e5, []);
+    await c5.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
+  assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);
 } catch (e) {
   console.error('✘', e.message); process.exitCode = 1;

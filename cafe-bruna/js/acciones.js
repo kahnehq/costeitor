@@ -2,6 +2,7 @@
 import { WSTEPS } from './asistente.js';
 import { CATS, LS_DATA, LS_PIN, LS_SYNC, MEDIOS } from './constantes.js';
 import { consumo } from './costeo.js';
+import { ask } from './dialogo.js';
 import { aBruto } from './iva.js';
 import { defaults } from './defaults.js';
 import { D, G, S, UI, byId, dayUnits, live, migrate, nextOrd, setD, setG, touch, upsertDay } from './estado.js';
@@ -15,7 +16,7 @@ import { $, addDays, addMonths, clp, monthLabel, now, sum, thisMonth, toast, tod
 export const ACTS = {
   tab: el => { UI.tab = el.dataset.k; UI._keepScroll = false; render(); },
   toggle: el => { const b = parseBind(el.dataset.t + ':bool'); setVal(b.coll, b.id, b.field, !getVal(b.coll, b.id, b.field)); rerender(); },
-  rm: el => { const o = byId(el.dataset.k, el.dataset.id); if (!o) return; if (!confirm(`¿Quitar “${o.nombre}”?`)) return; o.deleted = true; o.updatedAt = now(); touch(); rerender(); },
+  rm: async el => { const o = byId(el.dataset.k, el.dataset.id); if (!o) return; if (!await ask({ titulo: 'Quitar', texto: `¿Quitar “${o.nombre || 'sin nombre'}”?`, ok: 'Quitar', peligro: true })) return; o.deleted = true; o.updatedAt = now(); touch(); rerender(); },
   add: el => {
     const k = el.dataset.k, base = { id: uid(), ord: nextOrd(k), updatedAt: now(), deleted: false };
     if (k === 'fixed') D.fixed.push({ ...base, nombre: '', monto: 0, montoTipo: 'bruto', factura: false, tipo: 'fijo' });
@@ -63,11 +64,12 @@ export const ACTS = {
     UI.month = G.fecha.slice(0, 7); setG({ open: false }); touch(); rerender(); toast('Gasto guardado');
   },
   gEdit: el => { const e = byId('expenses', el.dataset.id); if (!e) return; setG({ open: true, step: 'form', editId: e.id, ...JSON.parse(JSON.stringify(e)) }); if (e.ingresado !== undefined) { G.monto = e.ingresado; } G.tipo = e.tipo || 'bruto'; G.open = true; G.step = 'form'; G.editId = e.id; rerender(); },
-  gDel: () => { if (!confirm('¿Eliminar este gasto?')) return; const e = byId('expenses', G.editId); e.deleted = true; e.updatedAt = now(); setG({ open: false }); touch(); rerender(); toast('Gasto eliminado'); },
-  loadFixed: () => {
+  gDel: async () => { if (!await ask({ titulo: 'Eliminar gasto', texto: '¿Eliminar este gasto?', ok: 'Eliminar', peligro: true })) return; const e = byId('expenses', G.editId); e.deleted = true; e.updatedAt = now(); setG({ open: false }); touch(); rerender(); toast('Gasto eliminado'); },
+  loadFixed: async () => {
     const mk = UI.month, exps = real(mk).exps, pend = live('fixed').filter(f => f.monto > 0 && !exps.some(e => e.itemId === f.id));
     if (!pend.length) return toast('Los costos fijos de este mes ya están registrados');
-    if (!confirm(`Registrar ${pend.length} costos fijos en ${monthLabel(mk)} por ${clp(sum(pend, f => f.monto))}?\nPuedes editar cada uno después.`)) return;
+    if (!await ask({ titulo: 'Registrar costos fijos', texto: `Se registrarán ${pend.length} costos fijos en ${monthLabel(mk)} por ${clp(sum(pend, f => aBruto(f.monto, f.factura, f.montoTipo, S().iva)))}.
+Puedes editar cada uno después.`, ok: 'Registrar' })) return;
     pend.forEach(f => D.expenses.push({ id: uid(), cat: f.tipo === 'prestamo' ? 'prestamo' : 'fijo', itemId: f.id, concepto: f.nombre, cant: 1, unidad: '', precio: f.monto, monto: aBruto(f.monto, f.factura, f.montoTipo, S().iva), ingresado: f.monto, tipo: f.montoTipo || 'bruto', factura: f.factura, medio: 'deb', nota: '', fecha: mk + '-01', updatedAt: now(), deleted: false }));
     touch(); rerender(); toast('Costos fijos registrados');
   },
@@ -82,7 +84,7 @@ export const ACTS = {
     if (!ok) { localStorage.removeItem(LS_SYNC); rerender(); return; }
     SD.token = ''; if (UI.recover && S().setupDone) { UI.recover = false; UI.wizard = false; } rerender();
   },
-  ghOff: () => { if (!confirm('¿Desconectar GitHub en este equipo? Tus datos quedan en el repositorio y en este navegador.')) return; localStorage.removeItem(LS_SYNC); SYNC.st = 'off'; rerender(); },
+  ghOff: async () => { if (!await ask({ titulo: 'Desconectar GitHub', texto: 'Tus datos quedan en el repositorio y en este navegador. Solo se quita la conexión de este equipo.', ok: 'Desconectar', peligro: true })) return; localStorage.removeItem(LS_SYNC); SYNC.st = 'off'; rerender(); },
   // pin
   pinGo: () => pinCheck(),
   pinSet: async () => { const v = ($('#newpin') || {}).value || ''; if (!/^\d{4}$/.test(v)) return toast('El PIN debe tener 4 dígitos'); localStorage.setItem(LS_PIN, await sha(v)); toast('PIN guardado en este equipo'); rerender(); },
@@ -99,7 +101,7 @@ export const ACTS = {
     download('gastos-cafe-bruna.csv', csv(rows), 'text/csv');
   },
   jsonOut: () => download(`respaldo-cafe-bruna-${today()}.json`, JSON.stringify(D, null, 1), 'application/json'),
-  wipe: () => { if (!confirm('¿Borrar TODOS los datos guardados en este navegador? (No borra GitHub)')) return; if (!confirm('¿Seguro? Esta acción no se puede deshacer.')) return; localStorage.removeItem(LS_DATA); setD(defaults()); UI.wizard = false; rerender(); }
+  wipe: async () => { if (!await ask({ titulo: 'Borrar todos los datos', texto: 'Se borran TODOS los datos guardados en este navegador. No borra lo que hay en GitHub. Esta acción no se puede deshacer.', ok: 'Borrar todo', peligro: true, escribir: 'BORRAR' })) return; localStorage.removeItem(LS_DATA); setD(defaults()); UI.wizard = false; rerender(); }
 };
 export const CHANGES = {
   setFecha: el => { if (el.value) { UI.fecha = el.value; rerender(); } },

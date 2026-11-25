@@ -225,3 +225,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; font-varian
 #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--gray-800); color: white; padding: 10px 18px; border-radius: 30px; font-size: 14px; z-index: 99; opacity: 0; pointer-events: none; transition: opacity .25s; }
 #toast.show { opacity: 1; }
 @media (max-width: 520px) { .wrap { padding: 1rem .85rem; } .grid3 { grid-template-columns: 1fr 1fr; } .tab-btn { font-size: 10px; } }
+
+/* diálogo de confirmación */
+.dlg-bg { position: fixed; inset: 0; background: rgba(42,39,36,0.5); z-index: 60; animation: fadeIn .15s; }
+.dlg { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(400px, 92vw); background: var(--white); border-radius: 18px; padding: 1.25rem; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+.dlg h3 { font-family: var(--font-display); font-weight: 400; font-size: 21px; margin-bottom: 8px; }
+.dlg-text { font-size: 14px; color: var(--gray-600); line-height: 1.5; white-space: pre-line; margin-bottom: 16px; }
+.dlg .fld { margin-bottom: 16px; }
+.dlg-actions { display: flex; gap: 8px; }
+.dlg-actions button { flex: 1; }
+.btn-primary.dlg-danger { background: var(--red); }
+.btn-primary.dlg-danger:hover { background: #b83030; }
+.btn-primary:disabled { opacity: .6; }
+@media (max-width: 600px) { .dlg { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 18px 18px 0 0; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); } }

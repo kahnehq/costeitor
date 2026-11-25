@@ -21,6 +21,7 @@ Sin build: `index.html` solo carga `styles.css` y `js/main.js` (`<script type="m
 | `finanzas.js` | `budget`, `real`, `pl`, `equilibrio`, `flujo` (F29) | no |
 | `render.js` | `render`/`rerender`, campos enlazados (`onBind`), `LIVE` | sí |
 | `pin.js`, `editores.js`, `asistente.js`, `paneles.js` | pantallas y pestañas | sí |
+| `dialogo.js` | `ask({ titulo, texto, ok, peligro, escribir })` → `Promise<boolean>`: confirmaciones propias (reemplazan a `confirm()`) | sí |
 | `acciones.js` | `ACTS`, `CHANGES`, exportar CSV/JSON | sí |
 | `sync.js` | sincronización opcional con GitHub (`merge`, `gh`, `sync`) | solo `paintSync` |
 | `main.js` | eventos globales e inicio | sí |
@@ -77,6 +78,7 @@ Historial: v2 movió los productos de reventa de la carta al catálogo (`venta: 
 - **Campos enlazados:** `data-bind="coll:id:campo:tipo"`. `coll` puede ser `settings` (campo con punto para anidados, por ejemplo `mix.tuu`), `fixed`, `menu`, `items`, `day` (id = fecha), `rec`/`recit` (id = menuId, campo = índice del ingrediente), `g` (modal de gasto) o `sd` (borrador de sync). `tipo` puede ser `clp`, `pct` (se muestra en %, se guarda como fracción), `dec`, `int` o `text`.
 - **No redibujes mientras se escribe:** el evento `input` actualiza el modelo y luego `refreshLive()`. El `change` de un input de texto solo reformatea; **no llama a `render()`**, porque se perdería el foco. Solo los `select`, `toggle`, los botones y las fechas redibujan.
 - **Valores calculados en vivo:** `<span data-live="clave:arg1:arg2">`, con la función en `LIVE.clave(...args)`.
+- **Confirmaciones:** nunca uses `confirm()`/`alert()` (las pruebas fallan si aparece uno). Usa `await ask({...})` de `dialogo.js` desde una acción `async`; para acciones irreversibles pasa `peligro: true` y, si no tiene vuelta atrás, `escribir: 'PALABRA'`. El diálogo vive fuera de `#app`, así que `render()` no lo cierra.
 - **Seguridad:** todo texto del usuario o de GitHub pasa por `esc()` antes de entrar a una plantilla HTML. El token de GitHub está en `localStorage` del mismo origen, así que un XSS lo expondría.
 - **Diseño responsivo:** se usa sobre todo en celular. Pruébalo a 390 px de ancho. El modal es una hoja inferior bajo 600 px.
 
@@ -133,7 +135,6 @@ npm test
 ## Pendientes y siguientes pasos
 
 - Completar precios de insumos en $0 (leche, vasos, tapas, azúcar, preparado de helado por ml) y las recetas de cappuccino, latte y helado. Son datos de Carlos, no del código.
-- Reemplazar `confirm()` por diálogos propios dentro de la app.
 - PWA: `manifest.webmanifest` + service worker para instalarla y usarla sin conexión en Edge y el celular. Si se agrega, el SW no debe cachear las llamadas a `api.github.com`.
 - Mostrar conflictos de sincronización (hoy gana el último en escribir, en silencio).
 - Ventas por día de la semana y por temporada (verano en la costa) en la pestaña Mes.
