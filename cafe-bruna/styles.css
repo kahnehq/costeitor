@@ -238,3 +238,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; font-varian
 .btn-primary.dlg-danger:hover { background: #b83030; }
 .btn-primary:disabled { opacity: .6; }
 @media (max-width: 600px) { .dlg { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 18px 18px 0 0; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); } }
+
+/* conflictos de sincronización */
+.conf-card { border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; }
+.conf-tab { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.conf-tab th { text-align: left; font-weight: 500; color: var(--gray-600); font-size: 12px; padding: 2px 6px 2px 0; }
+.conf-tab td { padding: 3px 6px 3px 0; border-top: 1px solid var(--gray-100); word-break: break-word; }
+.conf-tab td:first-child { color: var(--gray-600); }

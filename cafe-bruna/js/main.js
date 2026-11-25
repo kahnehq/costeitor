@@ -19,7 +19,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.target.matches('.pin-digit') && e.key === 'Backspace' && !e.target.value) { const p = document.querySelector(`[data-pin="${+e.target.dataset.pin - 1}"]`); p && p.focus(); }
-  if (e.key === 'Escape' && G.open) ACTS.gClose();
+  if (e.key === 'Escape' && UI.conf) ACTS.conflCerrar();
+  else if (e.key === 'Escape' && G.open) ACTS.gClose();
   if (e.key === 'Enter' && G.open && G.step === 'form' && e.target.matches('input')) { e.target.blur(); ACTS.gSave(); }
 });
 document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.sec) UI.open[d.dataset.sec] = d.open; }, true);

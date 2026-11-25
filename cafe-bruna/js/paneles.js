@@ -7,7 +7,8 @@ import { cajaEditor, fixedEditor, itemsEditor, menuEditor, paramsEditor, syncEdi
 import { G, S, UI, dayOf, dayTotal, live } from './estado.js';
 import { budget, equilibrio, flujo, pl, real } from './finanzas.js';
 import { catPill, fld, sel, tgl } from './render.js';
-import { SYNC, ghCfg } from './sync.js';
+import { ganadora, perdedora } from './conflictos.js';
+import { CONF, SYNC, ghCfg } from './sync.js';
 import { $, ICONS, clp, daysInMonth, dec, esc, fmtDay, icon, monthLabel, monthShort, nfmt, pad, pct, sum, thisMonth, today } from './util.js';
 
 /* ═══════════════ APP ═══════════════ */
@@ -23,9 +24,37 @@ export function appScreen() {
   return `<div class="screen">
     <header class="app-header"><div class="app-header-brand"><span class="logo-dot"></span>${esc(S().nombre)}</div><div id="sync-slot">${syncPill()}</div></header>
     <nav class="tab-bar">${TABS.map(([k, n, ic]) => `<button class="tab-btn ${UI.tab === k ? 'active' : ''}" data-act="tab" data-k="${k}">${icon(ic)}${n}</button>`).join('')}</nav>
-    <main class="app-content"><div class="wrap">${panel}</div></main>
+    <main class="app-content"><div class="wrap">${conflictBanner()}${panel}</div></main>
     ${G.open ? gastoModal() : ''}
+    ${UI.conf ? conflictosModal() : ''}
   </div>`;
+}
+/* ── CONFLICTOS DE SINCRONIZACIÓN ── */
+const COL_N = { fixed: 'Costo fijo', menu: 'Carta', items: 'Insumo', days: 'Caja del día', expenses: 'Gasto', settings: 'Ajustes' };
+const CAMPO_N = { nombre: 'Nombre', precio: 'Precio de compra', precioTipo: 'Precio con/sin IVA', monto: 'Monto', montoTipo: 'Monto con/sin IVA', factura: 'Con factura', mensual: 'Compra al mes', deleted: 'Eliminado',
+  contenido: 'Contenido', merma: 'Merma', unidad: 'Se compra por', ub: 'Medida', cat: 'Categoría', ord: 'Orden', esperado: 'Venta esperada', por: 'Por', precioVenta: 'Precio de venta', venta: 'Se vende en caja',
+  receta: 'Receta', extra: 'Costo extra', ef: 'Efectivo', tuu: 'TUU', mpd: 'MP débito', mpc: 'MP crédito', tr: 'Transferencia', tickets: 'Tickets', u: 'Unidades vendidas', nota: 'Nota',
+  concepto: 'Concepto', cant: 'Cantidad', fecha: 'Fecha', medio: 'Medio de pago', itemId: 'Insumo', ingresado: 'Monto ingresado', tipo: 'Con/sin IVA', mix: 'Cómo te pagan', iva: 'IVA', retiro: 'Retiro del dueño' };
+const fmtVal = v => v === undefined ? '—' : v === null ? '—' : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : typeof v === 'number' ? String(v).replace('.', ',') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+export function etiquetaConf(c) {
+  const e = ganadora(c); const n = c.k === 'days' ? 'Día ' + fmtDay(e.id) : c.k === 'settings' ? 'Ajustes' : (e.nombre || e.concepto || e.id);
+  return (COL_N[c.k] || c.k) + ' · ' + n;
+}
+export function conflictBanner() {
+  if (!CONF.length) return '';
+  return `<div class="note">⚠ Al sincronizar, <b>${CONF.length} cambio${CONF.length > 1 ? 's' : ''}</b> de dos equipos chocaron y quedó el más reciente. <button class="btn-link" data-act="conflRevisar">Revisar</button></div>`;
+}
+export function conflictosModal() {
+  const cards = CONF.map((c, i) => {
+    const g = ganadora(c), p = perdedora(c), gn = c.gana === 'local' ? 'Este equipo' : 'El otro equipo', pn = c.gana === 'local' ? 'El otro equipo' : 'Este equipo';
+    return `<div class="conf-card"><b>${esc(etiquetaConf(c))}</b>
+      <table class="conf-tab"><tr><th></th><th>Quedó (${gn})</th><th>Se pisó (${pn})</th></tr>
+      ${c.campos.map(k => `<tr><td>${esc(CAMPO_N[k] || k)}</td><td>${esc(fmtVal(g[k]))}</td><td>${esc(fmtVal(p[k]))}</td></tr>`).join('')}</table>
+      <div class="btn-row"><button class="btn-secondary btn-sm" data-act="conflUsar" data-i="${i}">Recuperar lo que se pisó</button><button class="btn-secondary btn-sm" data-act="conflDescartar" data-i="${i}">Dejar así</button></div></div>`;
+  }).join('') || '<div class="muted">No hay conflictos pendientes.</div>';
+  return `<div class="modal-bg" data-act="conflCerrar"></div><div class="modal"><div class="modal-h"><h3>Conflictos de sincronización</h3><button class="nav-btn" data-act="conflCerrar">×</button></div>
+    <p class="muted mb-12">Dos equipos cambiaron lo mismo antes de sincronizar. La app dejó el cambio más reciente; aquí puedes ver lo que se pisó y recuperarlo.</p>
+    ${cards}${CONF.length > 1 ? '<button class="btn-secondary" data-act="conflDescartarTodo">Dejar todos así</button>' : ''}</div>`;
 }
 export function monthNav() { return `<div class="date-nav"><button class="nav-btn" data-act="mPrev">‹</button><div class="month-label">${monthLabel(UI.month)}</div><button class="nav-btn" data-act="mNext">›</button>${UI.month !== thisMonth() ? `<button class="btn-link" data-act="mNow">Mes actual</button>` : ''}</div>`; }
 

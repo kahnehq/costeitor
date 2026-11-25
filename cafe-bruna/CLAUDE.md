@@ -23,6 +23,7 @@ Sin build: `index.html` solo carga `styles.css` y `js/main.js` (`<script type="m
 | `pin.js`, `editores.js`, `asistente.js`, `paneles.js` | pantallas y pestañas | sí |
 | `dialogo.js` | `ask({ titulo, texto, ok, peligro, escribir })` → `Promise<boolean>`: confirmaciones propias (reemplazan a `confirm()`) | sí |
 | `acciones.js` | `ACTS`, `CHANGES`, exportar CSV/JSON | sí |
+| `conflictos.js` | `detectarConflictos`, `camposDistintos`: detecta lo que `merge()` pisó (funciones puras) | no |
 | `sync.js` | sincronización opcional con GitHub (`merge`, `gh`, `sync`) | solo `paintSync` |
 | `main.js` | eventos globales e inicio | sí |
 | `depuracion.js` | publica la API interna en `window`, solo para pruebas y consola | — |
@@ -129,6 +130,7 @@ consumo(item)   = Σ unidadesMes(producto) × qty / factor  [+ unidadesMes(item)
 - Opcional. Usa un **repositorio privado** (`kahnehq/cafe-bruna-datos`), archivo `data/cafe-bruna.json` en la rama `main`, mediante la API de contenidos (`GET`/`PUT /repos/{o}/{r}/contents/{path}`) con un token *fine-grained* que solo tiene **Contents: Read and write** en ese repositorio.
 - `sync()`: GET → `merge(local, remoto)` → `migrate` → si el resultado difiere del remoto, PUT con `sha`. Ante un 409/422 reintenta (hasta 3 veces). Corre 3,5 s después de cada cambio (`touch`), al abrir la app y al volver a la pestaña.
 - `merge()`: la configuración completa gana por `updatedAt`. Cada colección se mezcla por `id` y gana la entidad con el `updatedAt` mayor (último en escribir). Las lápidas se propagan.
+- **Conflictos:** antes de mezclar, `sync()` llama a `detectarConflictos(D, remoto, SYNC.last)`. Es conflicto lo que **ambos lados modificaron después de la última sincronización** y quedó con contenido distinto; `merge()` sigue igual (gana el `updatedAt` mayor). Lo pisado se guarda en `CONF` (`localStorage['bruna.conflictos.v1']`, solo en ese navegador, nunca se sube) y se muestra como aviso con "Revisar": tabla de campos (quedó / se pisó), "Recuperar lo que se pisó" (copia esos campos y sube `updatedAt`, así gana en la próxima sync) o "Dejar así". Un cambio que solo hizo el otro equipo es una actualización normal, no un conflicto.
 - **Nunca** guardes datos del café en el repositorio público `costeitor`.
 
 ## Pruebas
@@ -145,5 +147,4 @@ npm test
 ## Pendientes y siguientes pasos
 
 - Completar precios de insumos en $0 (leche, vasos, tapas, azúcar, preparado de helado por ml) y las recetas de cappuccino, latte y helado. Son datos de Carlos, no del código.
-- Mostrar conflictos de sincronización (hoy gana el último en escribir, en silencio).
 - Ventas por día de la semana y por temporada (verano en la costa) en la pestaña Mes.

@@ -1,5 +1,6 @@
 /* Sincronización opcional con GitHub (repositorio privado). */
-import { LS_SYNC, LS_SYNCMETA } from './constantes.js';
+import { claveConflicto, detectarConflictos } from './conflictos.js';
+import { LS_CONFLICTOS, LS_SYNC, LS_SYNCMETA } from './constantes.js';
 import { defaults } from './defaults.js';
 import { D, G, migrate, saveLocal, setD } from './estado.js';
 import { paintSync } from './paneles.js';
@@ -8,6 +9,17 @@ import { now, toast } from './util.js';
 
 export let SYNC = { st: 'off', msg: '', last: (JSON.parse(localStorage.getItem(LS_SYNCMETA) || '{}')).last || null };
 export let SD = Object.assign({ owner: '', repo: '', branch: 'main', path: 'data/cafe-bruna.json', token: '' }, ghCfg() || {}); // borrador de sincronización
+
+/* Conflictos pendientes de revisar. Solo en este navegador (nunca se sube a GitHub). */
+export let CONF = (() => { try { const x = JSON.parse(localStorage.getItem(LS_CONFLICTOS) || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; } })();
+export function guardarConf() { localStorage.setItem(LS_CONFLICTOS, JSON.stringify(CONF)); }
+export function quitarConf(i) { CONF.splice(i, 1); guardarConf(); }
+export function vaciarConf() { CONF.length = 0; guardarConf(); }
+function registrarConflictos(lista) {
+  const ya = new Set(CONF.map(claveConflicto)); const nuevos = lista.filter(c => !ya.has(claveConflicto(c)));
+  if (nuevos.length) { CONF.unshift(...nuevos); CONF.length = Math.min(CONF.length, 50); guardarConf(); }
+  return nuevos.length;
+}
 
 /* ═══════════════ SINCRONIZACIÓN GITHUB ═══════════════ */
 export function ghCfg() { try { return JSON.parse(localStorage.getItem(LS_SYNC) || 'null'); } catch (e) { return null; } }
@@ -44,6 +56,8 @@ export async function sync(manual) {
         else if (r.status === 401) throw new Error('El token no es válido o expiró.');
         else if (r.status === 403) throw new Error('El token no tiene permiso “Contents: Read and write” en ese repositorio.');
         else throw new Error(`GitHub respondió ${r.status}.`);
+        const nuevos = remote ? registrarConflictos(detectarConflictos(D, remote, SYNC.last || 0)) : 0; // antes de mezclar: después ya se perdió la otra versión
+        if (nuevos) toast(`Se resolvieron ${nuevos} conflicto${nuevos > 1 ? 's' : ''} al sincronizar. Revísalos en Ajustes.`);
         const merged = remote ? merge(D, remote) : merge(D, { settings: {} });
         migrate(merged); setD(merged); saveLocal();
         const same = remote && JSON.stringify(merge(remote, { settings: {} })) === JSON.stringify(merged);

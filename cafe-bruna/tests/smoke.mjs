@@ -233,6 +233,56 @@ try {
     await c6.close();
   });
 
+  await test('conflictos de sincronización: se detectan, se muestran y se pueden recuperar', async () => {
+    // lógica pura
+    const base = { id: 'i1', nombre: 'Café', precio: 25000, updatedAt: 100 };
+    const hay = (l, r, desde) => page.evaluate(([l, r, d]) => detectarConflictos({ items: [l] }, { items: [r] }, d).length, [l, r, desde]);
+    assert.equal(await hay({ ...base, precio: 1, updatedAt: 300 }, { ...base, precio: 2, updatedAt: 200 }, 150), 1, 'ambos cambiaron después de la última sync');
+    assert.equal(await hay({ ...base, precio: 1, updatedAt: 120 }, { ...base, precio: 2, updatedAt: 200 }, 150), 0, 'solo cambió el otro equipo: es una actualización normal');
+    assert.equal(await hay({ ...base, precio: 2, updatedAt: 300 }, { ...base, precio: 2, updatedAt: 200 }, 150), 0, 'mismo contenido: no hay nada que pisar');
+    assert.equal(await hay({ ...base, updatedAt: 0 }, { ...base, precio: 2, updatedAt: 200 }, 0), 0, 'los datos por defecto (updatedAt 0) nunca chocan');
+
+    // dos equipos reales (GitHub simulado)
+    gh.content = null; gh.sha = null;
+    const A = await newPage(browser), B = await newPage(browser);
+    const conectar = async (pg) => {
+      await pg.click('[data-act=tab][data-k=ajustes]'); await pg.click('details[data-sec=sync] summary');
+      await pg.fill('[data-bind="sd::owner:text"]', 'kahnehq'); await pg.fill('[data-bind="sd::repo:text"]', 'cafe-bruna-datos'); await pg.fill('[data-bind="sd::token:text"]', 'github_pat_TEST');
+      await pg.click('[data-act=ghConnect]'); await pg.waitForFunction('SYNC.st === "ok"');
+    };
+    await A.page.goto(URL); for (let i = 0; i < 6; i++) await A.page.click('[data-act=wNext]'); await conectar(A.page);
+    await B.page.goto(URL); await B.page.click('[data-act=wRecover]');
+    await B.page.fill('[data-bind="sd::owner:text"]', 'kahnehq'); await B.page.fill('[data-bind="sd::repo:text"]', 'cafe-bruna-datos'); await B.page.fill('[data-bind="sd::token:text"]', 'github_pat_TEST');
+    await B.page.click('[data-act=ghConnect]'); await B.page.waitForFunction('S().setupDone === true');
+    await B.page.waitForTimeout(30);
+    // sin conflicto: A y B cambian cosas distintas
+    await A.page.evaluate("setVal('items', 'i1', 'precio', 26000)"); await A.page.waitForTimeout(30); await A.page.evaluate('sync(true)');
+    await B.page.evaluate("setVal('items', 'i9', 'precio', 5500)"); await B.page.evaluate('sync(true)');
+    assert.equal(await B.page.evaluate('CONF.length'), 0, 'cambios en cosas distintas no son conflicto');
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 26000);
+    // conflicto: A y B cambian el mismo insumo; B escribe último
+    await A.page.evaluate('sync(true)'); await B.page.evaluate('sync(true)'); await B.page.waitForTimeout(30);
+    await A.page.evaluate("setVal('items', 'i1', 'precio', 27000)"); await A.page.waitForTimeout(30); await A.page.evaluate('sync(true)');
+    await B.page.evaluate("setVal('items', 'i1', 'precio', 28000)"); await B.page.evaluate('sync(true)');
+    assert.equal(await B.page.evaluate('CONF.length'), 1);
+    assert.equal(await B.page.evaluate('CONF[0].gana'), 'local'); assert.deepEqual(await B.page.evaluate('CONF[0].campos'), ['precio']);
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 28000, 'gana el más reciente');
+    assert.match(await B.page.locator('.note:has-text("chocaron")').innerText(), /1 cambio/);
+    await B.page.click('[data-act=conflRevisar]');
+    const fila = await B.page.locator('.conf-tab tr:has-text("Precio de compra")').innerText();
+    assert.ok(/28000/.test(fila) && /27000/.test(fila), 'muestra lo que quedó y lo que se pisó: ' + fila);
+    // recuperar lo que se pisó
+    await B.page.click('[data-act=conflUsar]');
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 27000, 'se recupera la versión pisada');
+    assert.equal(await B.page.evaluate('CONF.length'), 0); assert.equal(await B.page.locator('.modal').count(), 0);
+    await B.page.evaluate('sync(true)'); await A.page.evaluate('sync(true)');
+    assert.equal(await A.page.evaluate("byId('items', 'i1').precio"), 27000, 'la recuperación llega al otro equipo');
+    assert.equal(await A.page.evaluate('CONF.length'), 0, 'recuperar no genera otro conflicto en el otro equipo');
+    assert.equal(await B.page.evaluate("localStorage.getItem('bruna.conflictos.v1')"), '[]');
+    assert.deepEqual(A.errors, []); assert.deepEqual(B.errors, []);
+    await A.ctx.close(); await B.ctx.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
   assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);

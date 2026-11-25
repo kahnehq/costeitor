@@ -2,6 +2,7 @@
 import { WSTEPS } from './asistente.js';
 import { CATS, LS_DATA, LS_PIN, LS_SYNC, MEDIOS } from './constantes.js';
 import { consumo } from './costeo.js';
+import { perdedora } from './conflictos.js';
 import { ask } from './dialogo.js';
 import { aBruto } from './iva.js';
 import { defaults } from './defaults.js';
@@ -9,7 +10,7 @@ import { D, G, S, UI, byId, dayUnits, live, migrate, nextOrd, setD, setG, touch,
 import { real } from './finanzas.js';
 import { pinCheck, sha } from './pin.js';
 import { getVal, parseBind, render, rerender, setVal } from './render.js';
-import { SD, SYNC, ghCfg, merge, sync } from './sync.js';
+import { CONF, SD, SYNC, ghCfg, merge, quitarConf, sync, vaciarConf } from './sync.js';
 import { $, addDays, addMonths, clp, monthLabel, now, sum, thisMonth, toast, today, uid } from './util.js';
 
 /* ═══════════════ ACCIONES ═══════════════ */
@@ -83,6 +84,17 @@ Puedes editar cada uno después.`, ok: 'Registrar' })) return;
     const ok = await sync(true);
     if (!ok) { localStorage.removeItem(LS_SYNC); rerender(); return; }
     SD.token = ''; if (UI.recover && S().setupDone) { UI.recover = false; UI.wizard = false; } rerender();
+  },
+  // conflictos de sincronización
+  conflRevisar: () => { UI.conf = true; rerender(); },
+  conflCerrar: () => { UI.conf = false; rerender(); },
+  conflDescartar: el => { quitarConf(+el.dataset.i); if (!CONF.length) UI.conf = false; rerender(); },
+  conflDescartarTodo: () => { vaciarConf(); UI.conf = false; rerender(); },
+  conflUsar: el => { // recupera los campos de la versión que se pisó; como queda más nueva, gana en la próxima sync
+    const i = +el.dataset.i, c = CONF[i]; if (!c) return; const p = perdedora(c), o = c.k === 'settings' ? S() : byId(c.k, c.id);
+    if (!o) { toast('Ya no existe ese registro'); return; }
+    c.campos.forEach(k => { if (p[k] === undefined) delete o[k]; else o[k] = JSON.parse(JSON.stringify(p[k])); });
+    o.updatedAt = now(); quitarConf(i); if (!CONF.length) UI.conf = false; touch(); rerender(); toast('Versión recuperada');
   },
   ghOff: async () => { if (!await ask({ titulo: 'Desconectar GitHub', texto: 'Tus datos quedan en el repositorio y en este navegador. Solo se quita la conexión de este equipo.', ok: 'Desconectar', peligro: true })) return; localStorage.removeItem(LS_SYNC); SYNC.st = 'off'; rerender(); },
   // pin

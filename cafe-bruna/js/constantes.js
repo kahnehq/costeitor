@@ -2,7 +2,7 @@
 
 
 /* ═══════════════ CONSTANTES ═══════════════ */
-export const LS_DATA = 'bruna.data.v1', LS_SYNC = 'bruna.sync.v1', LS_PIN = 'bruna.pin.v1', LS_SYNCMETA = 'bruna.syncmeta.v1';
+export const LS_DATA = 'bruna.data.v1', LS_SYNC = 'bruna.sync.v1', LS_PIN = 'bruna.pin.v1', LS_SYNCMETA = 'bruna.syncmeta.v1', LS_CONFLICTOS = 'bruna.conflictos.v1';
 export const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 export const CATS = {
   fijo:        { n: 'Costo fijo',      c: '#d94040', bg: '#fdeaea', e: '🏠' },

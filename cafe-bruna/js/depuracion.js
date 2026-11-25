@@ -5,8 +5,10 @@ import * as costeo from './costeo.js';
 import * as finanzas from './finanzas.js';
 import * as util from './util.js';
 import * as sync from './sync.js';
+import * as render from './render.js';
+import * as conflictos from './conflictos.js';
 import * as acciones from './acciones.js';
 
-Object.assign(window, util, costeo, finanzas, sync, acciones, estado);
+Object.assign(window, util, costeo, finanzas, sync, acciones, estado, render, conflictos);
 // D, G se reasignan: getters para ver siempre el valor vigente
 for (const k of ['D', 'G']) Object.defineProperty(window, k, { get: () => estado[k], configurable: true });
