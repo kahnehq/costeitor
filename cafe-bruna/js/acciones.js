@@ -86,6 +86,7 @@ Puedes editar cada uno después.`, ok: 'Registrar' })) return;
     SD.token = ''; if (UI.recover && S().setupDone) { UI.recover = false; UI.wizard = false; } rerender();
   },
   // conflictos de sincronización
+  diasAlcance: el => { UI.diasAlcance = el.dataset.k; rerender(); },
   conflRevisar: () => { UI.conf = true; rerender(); },
   conflCerrar: () => { UI.conf = false; rerender(); },
   conflDescartar: el => { quitarConf(+el.dataset.i); if (!CONF.length) UI.conf = false; rerender(); },

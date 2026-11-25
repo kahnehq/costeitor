@@ -8,7 +8,7 @@ import { now, sum, thisMonth, today } from './util.js';
 
 /* ═══════════════ ESTADO ═══════════════ */
 export let D = load();
-export const UI = { tab: 'hoy', fecha: today(), month: thisMonth(), wizard: false, conf: false, wstep: 0, recover: false, open: {}, unlocked: !localStorage.getItem(LS_PIN) };
+export const UI = { tab: 'hoy', fecha: today(), month: thisMonth(), wizard: false, conf: false, diasAlcance: 'mes', wstep: 0, recover: false, open: {}, unlocked: !localStorage.getItem(LS_PIN) };
 export let G = { open: false };                                  // modal de gasto
 
 export function load() {

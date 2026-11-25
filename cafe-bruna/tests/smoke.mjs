@@ -283,6 +283,32 @@ try {
     await A.ctx.close(); await B.ctx.close();
   });
 
+  await test('ventas por día de la semana y por temporada', async () => {
+    const { ctx: c7, page: p7, errors: e7 } = await newPage(browser);
+    await p7.goto(URL);
+    for (let i = 0; i < 6; i++) await p7.click('[data-act=wNext]');
+    const r = await p7.evaluate(() => {
+      const dia = (f, ef, cafes) => ({ id: f, fecha: f, ef, tuu: 0, mpd: 0, mpc: 0, tr: 0, tickets: 0, u: cafes ? { m1: cafes } : {}, nota: '', updatedAt: Date.now(), deleted: false });
+      // 2026-01-05 y 01-12 son lunes (verano), 01-06 martes (verano), 07-06 lunes (invierno), 01-07 miércoles sin ventas
+      D.days.push(dia('2026-01-05', 100000, 20), dia('2026-01-12', 60000, 10), dia('2026-01-06', 30000, 0), dia('2026-07-06', 20000, 5), dia('2026-01-07', 0, 0));
+      const sem = porDiaSemana(D.days), temp = porTemporada(D.days), mes = porMes(D.days);
+      return { dow: diaSemana('2026-01-05'), lun: sem[0], mar: sem[1], mie: sem[2], dom: sem[6], ver: temp[0], inv: temp[2], oto: temp[1], meses: mes.map(m => m.mk + ':' + m.dias) };
+    });
+    assert.equal(r.dow, 0, '2026-01-05 es lunes');
+    assert.equal(r.lun.dias, 3); near(r.lun.prom, 60000, 0.01, 'lunes: (100.000 + 60.000 + 20.000) / 3'); near(r.lun.cafesDia, 35 / 3, 0.001, 'cafés por lunes abierto');
+    assert.equal(r.mar.dias, 1); assert.equal(r.mie.dias, 0, 'un día sin ventas no cuenta como abierto'); assert.equal(r.dom.dias, 0);
+    assert.equal(r.ver.dias, 3); assert.equal(r.ver.n, 'Verano', 'el nombre de la temporada no se pisa'); near(r.ver.prom, 190000 / 3, 0.01, 'verano'); assert.equal(r.ver.meses, 1);
+    assert.equal(r.inv.dias, 1); near(r.inv.prom, 20000, 0.01, 'invierno'); assert.equal(r.oto.dias, 0);
+    assert.deepEqual(r.meses, ['2026-01:3', '2026-07:1']);
+    // pantalla Mes: alcance "todo el historial"
+    await p7.click('[data-act=tab][data-k=mes]');
+    await p7.click('[data-act=diasAlcance][data-k=todo]');
+    assert.match(await p7.locator('.card:has-text("Ventas por día de la semana") tr:has-text("Lunes")').innerText(), /^Lunes\s+3\s+\$60\.000/);
+    assert.match(await p7.locator('.card:has-text("Ventas por temporada")').innerText(), /Verano[\s\S]*3 días abiertos en 1 mes[\s\S]*Invierno[\s\S]*1 día abierto en 1 mes/);
+    assert.deepEqual(e7, []);
+    await c7.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
   assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);

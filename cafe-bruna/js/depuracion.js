@@ -7,8 +7,9 @@ import * as util from './util.js';
 import * as sync from './sync.js';
 import * as render from './render.js';
 import * as conflictos from './conflictos.js';
+import * as estacionalidad from './estacionalidad.js';
 import * as acciones from './acciones.js';
 
-Object.assign(window, util, costeo, finanzas, sync, acciones, estado, render, conflictos);
+Object.assign(window, util, costeo, finanzas, sync, acciones, estado, render, conflictos, estacionalidad);
 // D, G se reasignan: getters para ver siempre el valor vigente
 for (const k of ['D', 'G']) Object.defineProperty(window, k, { get: () => estado[k], configurable: true });
