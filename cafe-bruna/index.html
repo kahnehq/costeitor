@@ -76,7 +76,8 @@
   .card-title { font-size: 13px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.9rem; display: flex; align-items: center; gap: 6px; }
   .card-title svg { width: 16px; height: 16px; stroke: var(--green); fill: none; stroke-width: 2; }
   .card-hint { font-size: 12px; color: var(--gray-400); margin: -6px 0 12px; }
-  details.card > summary { list-style: none; cursor: pointer; margin-bottom: 0; display: flex; justify-content: space-between; }
+  details.card > summary { list-style: none; cursor: pointer; margin-bottom: 0; display: flex; }
+  details.card > summary::after { margin-left: auto; }
   details.card > summary::-webkit-details-marker { display: none; }
   details.card > summary::after { content: '›'; font-size: 20px; line-height: 1; color: var(--gray-400); transition: transform .2s; }
   details.card[open] > summary { margin-bottom: 1rem; }
@@ -250,7 +251,7 @@ const CATS = {
   retiro:      { n: 'Retiro dueño',    c: '#9a7a10', bg: '#fbf3d6', e: '👤' }
 };
 const ITEM_CATS = ['cafe','helado','reventa','desechables','limpieza','otros'];
-const MENU_CATS = { cafe: 'Café', te: 'Té', helado: 'Helado', reventa: 'Reventa', otro: 'Otro' };
+const MENU_CATS = { cafe: 'Café', te: 'Té', helado: 'Helado', otro: 'Otro preparado' };
 const MEDIOS = { ef: 'Efectivo', deb: 'Débito / transferencia', cred: 'Tarjeta de crédito' };
 const COBROS = [['ef','Efectivo'],['tuu','TUU'],['mpd','Mercado Pago débito'],['mpc','Mercado Pago crédito'],['tr','Transferencia']];
 
@@ -292,7 +293,7 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 function defaults() {
   const e = (o, i) => ({ ord: i, updatedAt: 0, deleted: false, ...o });
   return {
-    v: 1,
+    v: 2,
     settings: {
       updatedAt: 0, setupDone: false, nombre: 'Café de Bruna', inicio: thisMonth(), dias: 26,
       iva: 0.19, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10,
@@ -305,11 +306,10 @@ function defaults() {
       ['Préstamo máquina de helado', 110000, false, 'prestamo']
     ].map(([nombre, monto, factura, tipo], i) => e({ id: 'f' + (i + 1), nombre, monto, factura, tipo }, i)),
     menu: [
-      ['Espresso', 'cafe', 1500, 2, 'dia'], ['Lungo', 'cafe', 1800, 1, 'dia'], ['Americano', 'cafe', 1900, 5, 'dia'],
-      ['Cappuccino', 'cafe', 2000, 4, 'dia'], ['Latte macchiato', 'cafe', 2000, 3, 'dia'], ['Té en bolsita', 'te', 1000, 2, 'dia'],
-      ['Helado', 'helado', 2000, 5, 'dia'], ['Alfajor', 'reventa', 2000, 10, 'semana'], ['Alfajor 2 sabores', 'reventa', 3500, 5, 'semana'],
-      ['Barrita de proteína', 'reventa', 0, 0, 'semana'], ['Snickers vegano', 'reventa', 0, 0, 'semana'], ['Bollería', 'reventa', 0, 0, 'semana']
-    ].map(([nombre, cat, precio, esperado, por], i) => e({ id: 'm' + (i + 1), nombre, cat, precio, esperado, por }, i)),
+      ['Espresso', 'cafe', 1500, 2, 'dia', 250], ['Lungo', 'cafe', 1800, 1, 'dia', 250], ['Americano', 'cafe', 1900, 5, 'dia', 250],
+      ['Cappuccino', 'cafe', 2000, 4, 'dia', 250], ['Latte macchiato', 'cafe', 2000, 3, 'dia', 250], ['Té en bolsita', 'te', 1000, 2, 'dia', 0],
+      ['Helado', 'helado', 2000, 5, 'dia', 0]
+    ].map(([nombre, cat, precio, esperado, por, costo], i) => e({ id: 'm' + (i + 1), nombre, cat, precio, esperado, por, costo }, i)),
     items: [
       ['Café en grano', 'cafe', 'kg', 25000, 5, true, true], ['Café descafeinado', 'cafe', 'kg', 0, 0, true], ['Leche', 'cafe', 'litro', 0, 0, false],
       ['Leche de almendras', 'cafe', 'litro', 0, 0, false], ['Té en bolsita Selección', 'cafe', 'bolsita', 0, 52, false], ['Té en hoja', 'cafe', 'paquete', 0, 0, false],
@@ -322,7 +322,8 @@ function defaults() {
       ['Detergente', 'limpieza', 'unidad', 0, 0, false], ['Papel Nova', 'limpieza', 'paquete', 0, 0, false], ['Papel higiénico', 'limpieza', 'paquete', 0, 0, false],
       ['Limpia piso', 'limpieza', 'unidad', 0, 0, false], ['Limpia vidrios', 'limpieza', 'unidad', 0, 0, false], ['Limpia baños', 'limpieza', 'unidad', 0, 0, false],
       ['Esponjas', 'limpieza', 'paquete', 0, 0, false], ['Toallitas desinfectantes', 'limpieza', 'paquete', 0, 0, false]
-    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, mensual, factura, grano: !!grano }, i)),
+    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, mensual, factura, grano: !!grano, venta: cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana' }, i))
+      .map(it => Object.assign(it, ({ 'Alfajores': { precioVenta: 2000, esperado: 10 }, 'Alfajores 2 sabores': { precioVenta: 3500, esperado: 5 } })[it.nombre] || {})),
     days: [],
     expenses: []
   };
@@ -343,9 +344,34 @@ function load() {
     d.settings = Object.assign({}, def.settings, d.settings || {});
     d.settings.mix = Object.assign({}, def.settings.mix, (d.settings && d.settings.mix) || {});
     ['fixed', 'menu', 'items', 'days', 'expenses'].forEach(k => { if (!Array.isArray(d[k])) d[k] = def[k]; });
+    if (migrate(d)) localStorage.setItem(LS_DATA, JSON.stringify(d));
     return d;
   } catch (e) { console.error(e); return defaults(); }
 }
+/* v2: los productos de reventa se venden desde el catálogo de insumos. Idempotente. */
+function migrate(d) {
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).map(w => w.replace(/(es|s)$/, '')).join(' ').trim();
+  let changed = false;
+  d.items.forEach(i => { if (i.venta === undefined) i.venta = false; if (i.precioVenta === undefined) i.precioVenta = 0; if (i.esperado === undefined) i.esperado = 0; if (!i.por) i.por = 'semana'; });
+  d.menu.forEach(m => { if (m.costo === undefined) m.costo = m.cat === 'cafe' ? 250 : 0; });
+  d.menu.filter(m => !m.deleted && m.cat === 'reventa').forEach(m => {
+    let it = d.items.find(i => !i.deleted && i.fromMenu === m.id) || d.items.find(i => !i.deleted && norm(i.nombre) === norm(m.nombre));
+    if (!it) { it = { id: 'x' + m.id, ord: d.items.reduce((a, x) => Math.max(a, x.ord ?? 0), -1) + 1, nombre: m.nombre, cat: 'reventa', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, deleted: false }; d.items.push(it); }
+    Object.assign(it, { venta: true, precioVenta: m.precio || it.precioVenta || 0, esperado: m.esperado || 0, por: m.por || 'semana', fromMenu: m.id, updatedAt: now() });
+    m.deleted = true; m.updatedAt = now(); changed = true;
+  });
+  const map = {}; d.items.forEach(i => { if (i.fromMenu) map[i.fromMenu] = i.id; });
+  d.days.forEach(day => { if (!day.u) return; Object.keys(day.u).forEach(k => { if (map[k]) { day.u[map[k]] = (day.u[map[k]] || 0) + day.u[k]; delete day.u[k]; day.updatedAt = now(); changed = true; } }); });
+  if ((d.v || 1) < 2) { d.v = 2; changed = true; }
+  return changed;
+}
+/* lo que se puede vender en caja: la carta + insumos marcados “Se vende en caja” */
+function sellables() {
+  return [...live('menu').map(p => ({ id: p.id, nombre: p.nombre, precio: p.precio, cat: p.cat, grupo: 'carta' })),
+          ...live('items').filter(i => i.venta).map(i => ({ id: i.id, nombre: i.nombre, precio: i.precioVenta || 0, cat: 'reventa', grupo: 'reventa' }))];
+}
+function sellById(id) { const m = D.menu.find(x => x.id === id); if (m) return { precio: m.precio, cat: m.cat }; const i = D.items.find(x => x.id === id); return i ? { precio: i.precioVenta || 0, cat: 'reventa' } : null; }
+function margen(precioVenta, costoNeto) { const vn = (precioVenta || 0) / (1 + S().iva); return { m: vn - costoNeto, p: vn > 0 ? (vn - costoNeto) / vn : null }; }
 function saveLocal() { localStorage.setItem(LS_DATA, JSON.stringify(D)); }
 function touch() { saveLocal(); if (ghCfg()) { SYNC.st = 'pend'; paintSync(); clearTimeout(touch._t); touch._t = setTimeout(sync, 3500); } }
 const S = () => D.settings;
@@ -362,8 +388,8 @@ function upsertDay(f) {
   d.updatedAt = now(); return d;
 }
 function dayTotal(d) { return d ? (d.ef + d.tuu + d.mpd + d.mpc + d.tr) : 0; }
-function dayTeorico(d) { if (!d) return 0; return sum(Object.entries(d.u || {}), ([id, n]) => { const p = menuById(id); return p ? p.precio * n : 0; }); }
-function dayUnits(d, cat) { if (!d) return 0; return sum(Object.entries(d.u || {}), ([id, n]) => { const p = menuById(id); return p && (!cat || p.cat === cat) ? n : 0; }); }
+function dayTeorico(d) { if (!d) return 0; return sum(Object.entries(d.u || {}), ([id, n]) => { const p = sellById(id); return p ? p.precio * n : 0; }); }
+function dayUnits(d, cat) { if (!d) return 0; return sum(Object.entries(d.u || {}), ([id, n]) => { const p = sellById(id); return p && (!cat || p.cat === cat) ? n : 0; }); }
 
 /* ═══════════════ CÁLCULOS ═══════════════ */
 function addCat(cats, k, monto, fac) {
@@ -374,6 +400,7 @@ const unitsMes = p => p.por === 'semana' ? p.esperado * 4.33 : p.esperado * S().
 function budget() {
   const s = S(); let bruto = 0, cafes = 0, cafeVal = 0, units = 0;
   live('menu').forEach(p => { const u = unitsMes(p); bruto += u * p.precio; units += u; if (p.cat === 'cafe') { cafes += u; cafeVal += u * p.precio; } });
+  live('items').filter(i => i.venta).forEach(i => { const u = unitsMes(i); bruto += u * (i.precioVenta || 0); units += u; });
   const med = {}; COBROS.forEach(([k]) => med[k] = bruto * (s.mix[k] || 0));
   const cats = {};
   live('fixed').forEach(f => addCat(cats, f.tipo === 'prestamo' ? 'prestamo' : 'fijo', f.monto, f.factura));
@@ -500,9 +527,17 @@ const LIVE = {
   menuTot: () => clp(budget().bruto),
   itemsTot: () => clp(sum(live('items'), i => i.precio * i.mensual)),
   mixSum: () => { const s = sum(Object.values(S().mix)); return `<span class="${Math.abs(s - 1) < 0.001 ? 'ok-t' : 'bad-t'}">${pct(s, 0)}</span>`; },
-  equi: () => { const e = equilibrio(); return e.cafesDia ? dec(e.cafesDia, 1) + ' cafés/día' : '—'; }
+  equi: () => { const e = equilibrio(); return e.cafesDia ? dec(e.cafesDia, 1) + ' cafés/día' : '—'; },
+  mg: (k, id) => {
+    const o = byId(k, id); if (!o) return '';
+    const venta = k === 'menu' ? o.precio : o.precioVenta, costo = k === 'menu' ? (o.costo || 0) : (o.factura ? o.precio / (1 + S().iva) : o.precio);
+    if (!venta) return '<span class="muted">Pon el precio de venta para ver el margen</span>';
+    const r = margen(venta, costo), t = r.p == null ? '' : r.p >= 0.6 ? 'ok-t' : r.p >= 0.35 ? 'warn-t' : 'bad-t';
+    return `Margen por unidad (sin IVA): <b class="${t}">${clp(r.m)} · ${pct(r.p, 0)}</b>`;
+  },
+  granoTaza: () => { const g = live('items').find(i => i.grano); return g && g.precio ? `Solo el grano: ${clp(g.precio * S().dosis / 1000)} por taza (${dec(S().dosis, 0)} g)` : ''; }
 };
-function refreshLive() { document.querySelectorAll('[data-live]').forEach(el => { const f = LIVE[el.dataset.live]; if (f) el.innerHTML = f(); }); }
+function refreshLive() { document.querySelectorAll('[data-live]').forEach(el => { const [k, ...args] = el.dataset.live.split(':'); const f = LIVE[k]; if (f) el.innerHTML = f(...args); }); }
 
 /* ═══════════════ PIN ═══════════════ */
 async function sha(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('bruna:' + s)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join(''); }
@@ -539,12 +574,14 @@ function menuEditor() {
       <div class="erow-top">${input(`menu:${p.id}:nombre`, 'text', p.nombre, 'placeholder="Producto"')}<button class="btn-rm" data-act="rm" data-k="menu" data-id="${p.id}" title="Quitar">×</button></div>
       <div class="erow-fields">
         <label class="fld"><span>Tipo</span>${sel(`menu:${p.id}:cat`, p.cat, MENU_CATS)}</label>
-        ${fld('Precio (con IVA)', `menu:${p.id}:precio`, 'clp', p.precio, 'placeholder="0"')}
+        ${fld('Precio de compra (costo)', `menu:${p.id}:costo`, 'clp', p.costo, 'placeholder="0"')}
+        ${fld('Precio de venta (con IVA)', `menu:${p.id}:precio`, 'clp', p.precio, 'placeholder="0"')}
         ${fld('Venta esperada', `menu:${p.id}:esperado`, 'dec', p.esperado, 'placeholder="0"')}
         <label class="fld"><span>Por</span>${sel(`menu:${p.id}:por`, p.por, { dia: 'día', semana: 'semana' })}</label>
-      </div></div>`).join('') +
-    `<button class="btn-secondary btn-sm" data-act="add" data-k="menu">+ Agregar producto</button>
-     <div class="total-line"><span>Venta mensual presupuestada</span><b data-live="menuTot"></b></div>`;
+      </div><div class="muted mt-12" data-live="mg:menu:${p.id}"></div></div>`).join('') +
+    `<div class="note info">El costo de una bebida es lo que te cuesta prepararla: grano, leche, vaso, tapa, azúcar. <span data-live="granoTaza"></span><br>Lo que compras y revendes tal cual (alfajores, barritas…) va en el <b>catálogo de insumos</b> con “Se vende en caja”.</div>
+     <button class="btn-secondary btn-sm" data-act="add" data-k="menu">+ Agregar producto preparado</button>
+     <div class="total-line"><span>Venta mensual presupuestada (carta + reventa)</span><b data-live="menuTot"></b></div>`;
 }
 function itemsEditor() {
   return ITEM_CATS.map(c => {
@@ -552,11 +589,17 @@ function itemsEditor() {
     return `<div class="group-h">${catPill(c)}</div>` + its.map(i => `<div class="erow">
         <div class="erow-top">${input(`items:${i.id}:nombre`, 'text', i.nombre, 'placeholder="Insumo"')}<button class="btn-rm" data-act="rm" data-k="items" data-id="${i.id}" title="Quitar">×</button></div>
         <div class="erow-fields">
-          ${fld('Precio unitario', `items:${i.id}:precio`, 'clp', i.precio, 'placeholder="0"')}
+          ${fld('Precio de compra (con IVA)', `items:${i.id}:precio`, 'clp', i.precio, 'placeholder="0"')}
           ${fld('Unidad', `items:${i.id}:unidad`, 'text', i.unidad, 'placeholder="kg, litro…"')}
           ${fld('Compra al mes', `items:${i.id}:mensual`, 'dec', i.mensual, 'placeholder="0"')}
           <div>${tgl(`items:${i.id}:factura`, i.factura, 'Con factura')}</div>
-        </div></div>`).join('') +
+          <div>${tgl(`items:${i.id}:venta`, i.venta, 'Se vende en caja')}</div>
+        </div>
+        ${i.venta ? `<div class="erow-fields mt-12">
+          ${fld('Precio de venta (con IVA)', `items:${i.id}:precioVenta`, 'clp', i.precioVenta, 'placeholder="0"')}
+          ${fld('Venta esperada', `items:${i.id}:esperado`, 'dec', i.esperado, 'placeholder="0"')}
+          <label class="fld"><span>Por</span>${sel(`items:${i.id}:por`, i.por || 'semana', { dia: 'día', semana: 'semana' })}</label>
+        </div><div class="muted mt-12" data-live="mg:items:${i.id}"></div>` : ''}</div>`).join('') +
       `<button class="btn-link" data-act="add" data-k="items" data-cat="${c}">+ Agregar en ${CATS[c].n}</button>`;
   }).join('') + `<div class="total-line"><span>Compras mensuales presupuestadas</span><b data-live="itemsTot"></b></div>`;
 }
@@ -601,8 +644,8 @@ function syncEditor() {
 const WSTEPS = [
   { t: 'Bienvenido', s: 'Configuremos tu cafetería en 5 pasos. Todo se puede cambiar después en Ajustes.' },
   { t: 'Costos fijos', s: 'Lo que pagas todos los meses, vendas o no. Marca si te dan factura: su IVA lo descuentas en el F29.' },
-  { t: 'Tu carta', s: 'Precios con IVA y cuánto esperas vender. Con esto se arma el presupuesto y el punto de equilibrio.' },
-  { t: 'Insumos y compras', s: 'El catálogo que usarás para registrar gastos con dos toques. Pon el precio de referencia y cuánto compras al mes.' },
+  { t: 'Tu carta', s: 'Lo que preparas: costo, precio de venta con IVA y cuánto esperas vender. Con esto se arma el presupuesto y el punto de equilibrio.' },
+  { t: 'Insumos y compras', s: 'El catálogo para registrar gastos con dos toques. Marca “Se vende en caja” en lo que revendes (alfajores, barritas…) y ponle su precio de venta.' },
   { t: 'Cobros e impuestos', s: 'Comisiones de TUU y Mercado Pago, cómo te pagan los clientes, IVA y PPM.' },
   { t: 'Respaldo en GitHub', s: 'Opcional: guarda tus datos en un repositorio privado y úsalos desde cualquier Edge (PC o celular).' }
 ];
@@ -658,11 +701,15 @@ function monthNav() { return `<div class="date-nav"><button class="nav-btn" data
 function panelHoy() {
   const f = UI.fecha, d = dayOf(f), mk = f.slice(0, 7), r = real(mk), e = equilibrio(), s = S();
   const cafDia = r.dias ? r.cafes / r.dias : 0, prog = e.cafesDia ? Math.min(1, cafDia / e.cafesDia) : 0;
-  const menu = live('menu').filter(p => p.precio > 0 || (d && d.u && d.u[p.id]));
+  const vend = sellables().filter(p => p.precio > 0 || (d && d.u && d.u[p.id]));
+  const tile = p => { const n = (d && d.u && d.u[p.id]) || 0; return `<div class="prod ${n ? 'has' : ''}" data-act="inc" data-id="${p.id}">${n ? `<button class="prod-minus" data-act="dec" data-id="${p.id}" title="Restar">−</button>` : ''}<div class="prod-name">${esc(p.nombre)}</div><div class="prod-price">${clp(p.precio)}</div><div class="prod-count">${n}</div></div>`; };
+  const carta = vend.filter(p => p.grupo === 'carta'), rev = vend.filter(p => p.grupo === 'reventa');
   return `<div class="panel-title">Caja del día</div><div class="panel-sub">Toca cada producto que vendes y al cierre anota lo cobrado por cada medio.</div>
   <div class="date-nav"><button class="nav-btn" data-act="dPrev">‹</button><input type="date" class="field-input" value="${f}" data-change="setFecha"><button class="nav-btn" data-act="dNext">›</button>${f !== today() ? `<button class="btn-link" data-act="dToday">Hoy</button>` : ''}<span class="muted">${esc(fmtDay(f))}</span></div>
   <div class="card"><div class="card-title">${icon(ICONS.cup)} Lo que vendiste</div>
-    <div class="prod-grid">${menu.map(p => { const n = (d && d.u && d.u[p.id]) || 0; return `<div class="prod ${n ? 'has' : ''}" data-act="inc" data-id="${p.id}">${n ? `<button class="prod-minus" data-act="dec" data-id="${p.id}" title="Restar">−</button>` : ''}<div class="prod-name">${esc(p.nombre)}</div><div class="prod-price">${clp(p.precio)}</div><div class="prod-count">${n}</div></div>`; }).join('')}</div>
+    <div class="prod-grid">${carta.map(tile).join('')}</div>
+    ${rev.length ? `<div class="group-h">Reventa</div><div class="prod-grid">${rev.map(tile).join('')}</div>` : ''}
+    ${!vend.length ? '<div class="muted">Pon precios de venta en Ajustes → Carta, o marca insumos con “Se vende en caja”.</div>' : ''}
     <div class="total-line"><span>Venta según la carta</span><b data-live="hoyTeo"></b></div>
   </div>
   <div class="card"><div class="card-title">${icon(ICONS.cash)} Cómo te pagaron</div>
@@ -837,8 +884,8 @@ const ACTS = {
   add: el => {
     const k = el.dataset.k, base = { id: uid(), ord: nextOrd(k), updatedAt: now(), deleted: false };
     if (k === 'fixed') D.fixed.push({ ...base, nombre: '', monto: 0, factura: false, tipo: 'fijo' });
-    if (k === 'menu') D.menu.push({ ...base, nombre: '', cat: 'cafe', precio: 0, esperado: 0, por: 'dia' });
-    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false });
+    if (k === 'menu') D.menu.push({ ...base, nombre: '', cat: 'cafe', precio: 0, costo: 0, esperado: 0, por: 'dia' });
+    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, venta: el.dataset.cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana' });
     touch(); rerender(); setTimeout(() => { const i = document.querySelector(`[data-bind="${k}:${base.id}:nombre:text"]`); i && i.focus(); }, 30);
   },
   // asistente
@@ -916,7 +963,7 @@ const ACTS = {
 };
 const CHANGES = {
   setFecha: el => { if (el.value) { UI.fecha = el.value; rerender(); } },
-  jsonIn: el => { const f = el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const inc = JSON.parse(rd.result); D = merge(D, inc); touch(); rerender(); toast('Respaldo importado'); } catch (e) { toast('Archivo no válido'); } }; rd.readAsText(f); }
+  jsonIn: el => { const f = el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const inc = JSON.parse(rd.result); D = merge(D, inc); migrate(D); touch(); rerender(); toast('Respaldo importado'); } catch (e) { toast('Archivo no válido'); } }; rd.readAsText(f); }
 };
 function csv(rows) { return '﻿' + rows.map(r => r.map(v => { v = String(v ?? ''); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';')).join('\r\n'); }
 function download(name, content, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], { type })); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
@@ -926,7 +973,7 @@ function ghCfg() { try { return JSON.parse(localStorage.getItem(LS_SYNC) || 'nul
 const b64enc = s => { const b = new TextEncoder().encode(s); let bin = ''; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin); };
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
 function merge(a, b) {
-  const out = { v: 1 };
+  const out = { v: Math.max(a.v || 1, b.v || 1) };
   const sa = a.settings || {}, sb = b.settings || {};
   out.settings = JSON.parse(JSON.stringify((sa.updatedAt || 0) >= (sb.updatedAt || 0) ? sa : sb));
   const def = defaults().settings; out.settings = Object.assign({}, def, out.settings); out.settings.mix = Object.assign({}, def.mix, out.settings.mix || {});
@@ -957,7 +1004,7 @@ async function sync(manual) {
         else if (r.status === 403) throw new Error('El token no tiene permiso “Contents: Read and write” en ese repositorio.');
         else throw new Error(`GitHub respondió ${r.status}.`);
         const merged = remote ? merge(D, remote) : merge(D, { settings: {} });
-        D = merged; saveLocal();
+        migrate(merged); D = merged; saveLocal();
         const same = remote && JSON.stringify(merge(remote, { settings: {} })) === JSON.stringify(merged);
         if (!same) {
           const p = await gh('PUT', { message: `Café de Bruna · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`, content: b64enc(JSON.stringify(merged, null, 1)), branch: ghCfg().branch, ...(sha ? { sha } : {}) });
