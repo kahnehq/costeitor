@@ -16,6 +16,7 @@ Sin build: `index.html` solo carga `styles.css` y `js/main.js` (`<script type="m
 | `util.js` | formato (`clp`, `pct`, `dec`, `nfmt`), parseo, fechas, `esc`, `ICONS`, `toast` | solo `$` y `toast` |
 | `defaults.js` | `DEF_RECETAS`, `MEDIDAS`, `UB`, `defaults()` | no |
 | `estado.js` | `D`, `UI`, `G`, `load()`, `migrate()`, `saveLocal()`, `touch()`, acceso a colecciones | no |
+| `iva.js` | `aBruto`, `aNeto`: conversión de montos con/sin IVA (funciones puras) | no |
 | `costeo.js` | `costBase`, `costMenu`, `margen`, `sugerido`, `consumo` | no |
 | `finanzas.js` | `budget`, `real`, `pl`, `equilibrio`, `flujo` (F29) | no |
 | `render.js` | `render`/`rerender`, campos enlazados (`onBind`), `LIVE` | sí |
@@ -32,23 +33,23 @@ Reglas de la división (pensadas para poder envolver la app en una APK u otro co
 - El acceso a `localStorage` está en `estado.js` (datos), `sync.js` (configuración de GitHub) y `pin.js` (PIN). Un contenedor nuevo debería reemplazar solo esos puntos.
 - Los módulos se importan en ciclo (render ↔ paneles ↔ acciones). Es seguro mientras el código de nivel superior no llame a funciones de otro módulo al cargarse; hazlo solo dentro de funciones.
 
-## Modelo de datos (versión 3, `D.v === 3`)
+## Modelo de datos (versión 4, `D.v === 4`)
 
 Se guarda en `localStorage['bruna.data.v1']`. El nombre de la clave no cambia entre versiones; la versión real está en `D.v`.
 
 ```
 D = {
-  v: 3,
-  settings: { updatedAt, setupDone, nombre, inicio:'YYYY-MM', dias, iva, tuu, mpd, mpc, facturaCom, ppm, dosis,
+  v: 4,
+  settings: { updatedAt, setupDone, nombre, inicio:'YYYY-MM', dias, iva, usaCompras, tuu, mpd, mpc, facturaCom, ppm, dosis,
               margenObj, cajaInicial, f29Pendiente, remanente, retiro, mix:{ef,tuu,mpd,mpc,tr} },
-  fixed:    [{ id, ord, nombre, monto, factura, tipo:'fijo'|'prestamo', updatedAt, deleted }],
+  fixed:    [{ id, ord, nombre, monto, montoTipo:'bruto'|'neto', factura, tipo:'fijo'|'prestamo', updatedAt, deleted }],
   menu:     [{ id, ord, nombre, cat:'cafe'|'te'|'helado'|'otro', precio, esperado, por:'dia'|'semana',
                receta:[{ itemId, qty }], extra, updatedAt, deleted }],
-  items:    [{ id, ord, nombre, cat (ITEM_CATS), unidad (texto: “bidón”, “bolsa 1 kg”), precio (por compra, con IVA),
+  items:    [{ id, ord, nombre, cat (ITEM_CATS), unidad (texto: “bidón”, “bolsa 1 kg”), precio (por compra), precioTipo:'bruto'|'neto',
                ub:'kg'|'l'|'und', contenido, merma, mensual, factura, grano, venta, precioVenta, esperado, por,
                fromMenu?, updatedAt, deleted }],
   days:     [{ id:'YYYY-MM-DD', fecha, ef, tuu, mpd, mpc, tr, tickets, u:{ [menuId|itemId]: unidades }, nota, updatedAt, deleted }],
-  expenses: [{ id, fecha, cat (keys de CATS), itemId, concepto, cant, unidad, precio, monto (con IVA), factura,
+  expenses: [{ id, fecha, cat (keys de CATS), itemId, concepto, cant, unidad, precio, monto (SIEMPRE con IVA = lo pagado), ingresado, tipo:'bruto'|'neto', factura,
                medio:'ef'|'deb'|'cred', nota, updatedAt, deleted }]
 }
 ```
@@ -66,7 +67,9 @@ D = {
 2. Sube `v` en `defaults()` y en la línea `if ((d.v || 1) < N)`.
 3. Agrega una prueba de migración en `tests/smoke.mjs`.
 
-Historial: v2 movió los productos de reventa de la carta al catálogo (`venta: true`) y trasladó las unidades vendidas de `day.u`. v3 agregó medidas de compra, merma y recetas.
+**IVA bruto/neto (v4):** `precio` (insumo), `monto` (costo fijo) y el monto de cada gasto se pueden escribir con o sin IVA. `tipo`/`precioTipo`/`montoTipo` = `'bruto'` (incluye IVA, por defecto) o `'neto'`. Solo importa **con factura**; sin factura el IVA es costo y el monto vale igual. En los gastos, `monto` se guarda siempre con IVA (`aBruto`) para que `real()`, `pl()` y el F29 no cambien; `ingresado` y `tipo` recuerdan cómo lo escribió Carlos y se usan al editar. Un insumo nuevo nace como `bruto`.
+
+Historial: v2 movió los productos de reventa de la carta al catálogo (`venta: true`) y trasladó las unidades vendidas de `day.u`. v3 agregó medidas de compra, merma y recetas. v4 agregó `precioTipo`, `montoTipo`, `usaCompras` y los campos `ingresado`/`tipo` de los gastos.
 
 ## Convenciones de UI (importante)
 
@@ -82,7 +85,9 @@ Historial: v2 movió los productos de reventa de la carta al catálogo (`venta: 
 En Costeitor, el costo de un ingrediente es su precio por unidad base por la cantidad usada (g→kg y ml→l ÷ 1000). Aquí se agrega la presentación de compra, la merma y el IVA:
 
 ```
-costBase(item)  = (factura ? precio/(1+IVA) : precio) / contenido / (1 − merma)   // $ por kg | litro | unidad
+costBase(item)  = precioCosto(item) / contenido / (1 − merma)
+precioCosto     = promedio ponderado por cantidad de las compras del insumo (mes actual y 2 anteriores, neto si hay factura);
+                  sin compras (o con usaCompras=false): precio del catálogo según precioTipo (neto: tal cual; bruto: /(1+IVA))   // $ por kg | litro | unidad
 costIng(ing)    = costBase(item) × qty / (ub==='und' ? 1 : 1000)                  // receta en g, ml o und
 costMenu(p)     = Σ costIng(receta) + extra                                       // extra = otros costos variables por unidad
 costSell(id)    = costMenu (carta) | costBase (insumo con venta:true)
@@ -92,6 +97,7 @@ sugerido(c)     = ceil100( c × (1+margenObj) / (1/(1+IVA) − comPct()) )
 consumo(item)   = Σ unidadesMes(producto) × qty / factor  [+ unidadesMes(item) si se revende]  / contenido / (1 − merma)
 ```
 
+- Si compras el mismo café en kilos distintos y a precios distintos, el costo sigue el promedio ponderado de lo realmente comprado, no el último precio.
 - El IVA de compras con factura es crédito fiscal, así que el costo es neto. Sin factura, el IVA es costo.
 - `margenObj` es el margen **sobre costo**, como en Costeitor. Por defecto 200 %.
 - **Precio de compra** = lo que se paga por cada compra (bolsa, bidón, paquete). `contenido` dice cuántos kg, litros o unidades trae.

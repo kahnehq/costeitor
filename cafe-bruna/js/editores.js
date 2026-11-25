@@ -12,6 +12,7 @@ export function fixedEditor() {
       <div class="erow-top">${input(`fixed:${f.id}:nombre`, 'text', f.nombre, 'placeholder="Nombre del costo"')}<button class="btn-rm" data-act="rm" data-k="fixed" data-id="${f.id}" title="Quitar">×</button></div>
       <div class="erow-fields">
         ${fld('Monto mensual', `fixed:${f.id}:monto`, 'clp', f.monto, 'placeholder="0"')}
+        ${f.factura ? `<label class="fld"><span>El monto está…</span>${sel(`fixed:${f.id}:montoTipo`, f.montoTipo || 'bruto', { bruto: 'Incluye IVA (bruto)', neto: 'Sin IVA (neto)' })}</label>` : ''}
         <label class="fld"><span>Tipo</span>${sel(`fixed:${f.id}:tipo`, f.tipo, { fijo: 'Costo fijo', prestamo: 'Cuota de préstamo' })}</label>
         <div>${tgl(`fixed:${f.id}:factura`, f.factura, 'Con factura')}</div>
       </div></div>`).join('') +
@@ -47,7 +48,8 @@ export function itemsEditor() {
         <div class="erow-top">${input(`items:${i.id}:nombre`, 'text', i.nombre, 'placeholder="Insumo"')}<button class="btn-rm" data-act="rm" data-k="items" data-id="${i.id}" title="Quitar">×</button></div>
         <div class="erow-fields">
           ${fld('Se compra por', `items:${i.id}:unidad`, 'text', i.unidad, 'placeholder="bolsa 1 kg, bidón, paquete…"')}
-          ${fld('Precio de compra (con IVA)', `items:${i.id}:precio`, 'clp', i.precio, 'placeholder="0"')}
+          ${fld('Precio de compra' + (i.factura && i.precioTipo === 'neto' ? ' (sin IVA)' : ' (con IVA)'), `items:${i.id}:precio`, 'clp', i.precio, 'placeholder="0"')}
+          ${i.factura ? `<label class="fld"><span>El precio está…</span>${sel(`items:${i.id}:precioTipo`, i.precioTipo || 'bruto', { bruto: 'Incluye IVA (bruto)', neto: 'Sin IVA (neto)' })}</label>` : ''}
           ${costeable(i) ? `<label class="fld"><span>Medida para recetas</span>${sel(`items:${i.id}:ub`, i.ub || 'und', { kg: 'Kilo → g', l: 'Litro → ml', und: 'Unidad' })}</label>
           ${fld(`Contenido de cada compra (${{ kg: 'kg', l: 'litros', und: 'unidades' }[i.ub || 'und']})`, `items:${i.id}:contenido`, 'dec', i.contenido, 'placeholder="1"')}
           ${fld('Merma %', `items:${i.id}:merma`, 'pct', i.merma)}` : ''}
@@ -72,6 +74,8 @@ export function paramsEditor() {
     <div class="group-h">¿Cómo te pagan? (para proyectar)</div>
     <div class="gridauto mb-8">${COBROS.map(([k, n]) => fld(n + ' %', `settings::mix.${k}`, 'pct', s.mix[k])).join('')}</div>
     <div class="muted mb-12">Suma: <b data-live="mixSum"></b> (debe dar 100%)</div>
+    <div class="group-h">Costeo</div>
+    <div class="mb-12">${tgl('settings::usaCompras', s.usaCompras !== false, 'Costear con el promedio de mis compras de los últimos 3 meses (si no hay compras, usa el precio del insumo)')}</div>
     <div class="group-h">Impuestos y operación</div>
     <div class="gridauto">${fld('IVA %', 'settings::iva', 'pct', s.iva)}${fld('PPM %', 'settings::ppm', 'pct', s.ppm)}${fld('Días abiertos al mes', 'settings::dias', 'dec', s.dias)}</div>
     <p class="muted mt-12">TUU: tasa plana 1,49% + IVA. Mercado Pago Point Smart 2: 2,19% débito y 2,69% crédito (bajo $2 MM/mes). PPM Pro Pyme General 0,25% (confírmalo con tu contador).</p>`;

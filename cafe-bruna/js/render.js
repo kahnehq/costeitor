@@ -1,7 +1,8 @@
 /* Render general, campos enlazados y valores en vivo. */
 import { wizardScreen } from './asistente.js';
 import { CATS } from './constantes.js';
-import { consumo, costBase, costIng, costMenu, itemUB, margen, sugerido } from './costeo.js';
+import { comprasRecientes, consumo, costBase, costIng, costMenu, itemUB, margen, sugerido } from './costeo.js';
+import { aBruto } from './iva.js';
 import { UB } from './defaults.js';
 import { D, G, S, UI, byId, dayOf, dayTeorico, dayTotal, dayUnits, live, touch, upsertDay } from './estado.js';
 import { budget, equilibrio } from './finanzas.js';
@@ -79,9 +80,9 @@ export const LIVE = {
   hoyCob: () => clp(dayTotal(dayOf(UI.fecha))),
   hoyDif: () => { const d = dayOf(UI.fecha); if (!d || !dayUnits(d)) return '<span class="muted">anota productos</span>'; const df = dayTotal(d) - dayTeorico(d); const t = Math.abs(df) < 1 ? 'ok-t' : Math.abs(df) <= 2000 ? 'warn-t' : 'bad-t'; return `<span class="${t}">${df > 0 ? '+' : ''}${clp(df)}</span>`; },
   hoyTicket: () => { const d = dayOf(UI.fecha); return d && d.tickets ? clp(dayTotal(d) / d.tickets) : '—'; },
-  fixedTot: () => clp(sum(live('fixed'), f => f.monto)),
+  fixedTot: () => clp(sum(live('fixed'), f => aBruto(f.monto, f.factura, f.montoTipo, S().iva))),
   menuTot: () => clp(budget().bruto),
-  itemsTot: () => clp(sum(live('items'), i => i.precio * i.mensual)),
+  itemsTot: () => clp(sum(live('items'), i => aBruto(i.precio, i.factura, i.precioTipo, S().iva) * i.mensual)),
   mixSum: () => { const s = sum(Object.values(S().mix)); return `<span class="${Math.abs(s - 1) < 0.001 ? 'ok-t' : 'bad-t'}">${pct(s, 0)}</span>`; },
   equi: () => { const e = equilibrio(); return e.cafesDia ? dec(e.cafesDia, 1) + ' cafés/día' : '—'; },
   mg: (k, id) => {
@@ -95,8 +96,10 @@ export const LIVE = {
   ic: (mid, idx) => { const p = byId('menu', mid); const r = p && p.receta[+idx]; return r ? clp(costIng(r)) : ''; },
   cb: id => {
     const it = byId('items', id); if (!it) return ''; const u = itemUB(it), cb = costBase(it);
-    if (!it.precio) return '<span class="muted">Pon el precio de compra para calcular el costo por receta</span>';
-    return `Costo real ${it.factura ? 'sin IVA' : 'con IVA'}${it.merma ? `, con ${pct(it.merma, 0)} de merma` : ''}: <b>${clp(cb)} por ${u.n}</b>${u.f > 1 ? ` · $${(cb / u.f).toFixed(1).replace('.', ',')} por ${u.r}` : ''}`;
+    const cp = S().usaCompras !== false ? comprasRecientes(it) : [];
+    if (!it.precio && !cp.length) return '<span class="muted">Pon el precio de compra para calcular el costo por receta</span>';
+    const origen = cp.length ? ` · promedio de ${cp.length} compra${cp.length > 1 ? 's' : ''} de los últimos 3 meses` : '';
+    return `Costo real ${it.factura ? 'sin IVA' : 'con IVA'}${origen}${it.merma ? `, con ${pct(it.merma, 0)} de merma` : ''}: <b>${clp(cb)} por ${u.n}</b>${u.f > 1 ? ` · $${(cb / u.f).toFixed(1).replace('.', ',')} por ${u.r}` : ''}`;
   },
   cons: id => { const it = byId('items', id); const c = consumo(id); return c > 0 ? `Según tus recetas y ventas esperadas usas ~<b>${dec(c, 1)} ${esc(it.unidad || UB[it.ub].n)}</b> al mes · <button class="btn-link" data-act="useCons" data-id="${id}">Usar como compra al mes</button>` : ''; }
 };

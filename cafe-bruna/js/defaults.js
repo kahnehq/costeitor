@@ -14,10 +14,10 @@ export const UB = { kg: { n: 'kilo', r: 'g', f: 1000 }, l: { n: 'litro', r: 'ml'
 export function defaults() {
   const e = (o, i) => ({ ord: i, updatedAt: 0, deleted: false, ...o });
   return {
-    v: 3,
+    v: 4,
     settings: {
       updatedAt: 0, setupDone: false, nombre: 'Café de Bruna', inicio: thisMonth(), dias: 26,
-      iva: 0.19, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10, margenObj: 2,
+      iva: 0.19, usaCompras: true, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10, margenObj: 2,
       cajaInicial: 0, f29Pendiente: 0, remanente: 0, retiro: 0,
       mix: { ef: 0.25, tuu: 0.35, mpd: 0.25, mpc: 0.15, tr: 0 }
     },
@@ -25,7 +25,7 @@ export function defaults() {
       ['Renta local', 400000, false, 'fijo'], ['Comodato máquina de café', 172000, true, 'fijo'], ['Celular', 32000, false, 'fijo'],
       ['Electricidad', 0, true, 'fijo'], ['Contador', 0, false, 'fijo'], ['Patente municipal (mensual)', 0, false, 'fijo'],
       ['Préstamo máquina de helado', 110000, false, 'prestamo']
-    ].map(([nombre, monto, factura, tipo], i) => e({ id: 'f' + (i + 1), nombre, monto, factura, tipo }, i)),
+    ].map(([nombre, monto, factura, tipo], i) => e({ id: 'f' + (i + 1), nombre, monto, montoTipo: 'bruto', factura, tipo }, i)),
     menu: [
       ['Espresso', 'cafe', 1500, 2, 'dia', 250], ['Lungo', 'cafe', 1800, 1, 'dia', 250], ['Americano', 'cafe', 1900, 5, 'dia', 250],
       ['Cappuccino', 'cafe', 2000, 4, 'dia', 250], ['Latte macchiato', 'cafe', 2000, 3, 'dia', 250], ['Té en bolsita', 'te', 1000, 2, 'dia', 0],
@@ -43,7 +43,7 @@ export function defaults() {
       ['Detergente', 'limpieza', 'unidad', 0, 0, false], ['Papel Nova', 'limpieza', 'paquete', 0, 0, false], ['Papel higiénico', 'limpieza', 'paquete', 0, 0, false],
       ['Limpia piso', 'limpieza', 'unidad', 0, 0, false], ['Limpia vidrios', 'limpieza', 'unidad', 0, 0, false], ['Limpia baños', 'limpieza', 'unidad', 0, 0, false],
       ['Esponjas', 'limpieza', 'paquete', 0, 0, false], ['Toallitas desinfectantes', 'limpieza', 'paquete', 0, 0, false]
-    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, mensual, factura, grano: !!grano, venta: cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ...defMedida(nombre) }, i))
+    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, precioTipo: 'bruto', mensual, factura, grano: !!grano, venta: cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ...defMedida(nombre) }, i))
       .map(it => Object.assign(it, ({ 'Alfajores': { precioVenta: 2000, esperado: 10 }, 'Alfajores 2 sabores': { precioVenta: 3500, esperado: 5 } })[it.nombre] || {})),
     days: [],
     expenses: []

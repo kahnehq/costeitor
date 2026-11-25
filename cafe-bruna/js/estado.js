@@ -46,7 +46,11 @@ export function migrate(d) {
   });
   const map = {}; d.items.forEach(i => { if (i.fromMenu) map[i.fromMenu] = i.id; });
   d.days.forEach(day => { if (!day.u) return; Object.keys(day.u).forEach(k => { if (map[k]) { day.u[map[k]] = (day.u[map[k]] || 0) + day.u[k]; delete day.u[k]; day.updatedAt = now(); changed = true; } }); });
-  if ((d.v || 1) < 3) { d.v = 3; changed = true; }
+  // v4: cada precio de compra y cada costo fijo declara si incluye IVA (bruto) o no (neto)
+  d.items.forEach(i => { if (i.precioTipo === undefined) i.precioTipo = 'bruto'; });
+  d.fixed.forEach(f => { if (f.montoTipo === undefined) f.montoTipo = 'bruto'; });
+  if (d.settings && d.settings.usaCompras === undefined) d.settings.usaCompras = true;
+  if ((d.v || 1) < 4) { d.v = 4; changed = true; }
   return changed;
 }
 

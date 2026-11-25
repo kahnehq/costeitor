@@ -2,11 +2,27 @@
 import { UB } from './defaults.js';
 import { D, S, byId, live } from './estado.js';
 import { unitsMes } from './finanzas.js';
-import { sum } from './util.js';
+import { aNeto } from './iva.js';
+import { addMonths, sum, thisMonth } from './util.js';
 
 /* ── costeo (lógica de Costeitor) ── */
+/* Compras registradas del insumo en el mes actual y los 2 anteriores (con cantidad y monto) */
+export function comprasRecientes(it) {
+  if (!it) return []; const ini = addMonths(thisMonth(), -2) + '-01';
+  return D.expenses.filter(e => !e.deleted && e.itemId === it.id && e.cant > 0 && e.monto > 0 && e.fecha >= ini);
+}
+/* Precio neto de costo por unidad de compra. Si hay compras recientes, promedio ponderado por cantidad
+   (así el precio del café por kilo puede variar según lo que compres); si no, el precio del catálogo. */
+export function precioCosto(it) {
+  const iva = S().iva;
+  if (S().usaCompras !== false) {
+    const c = comprasRecientes(it), q = sum(c, e => e.cant);
+    if (q > 0) return sum(c, e => aNeto(e.monto, e.factura, 'bruto', iva)) / q; // e.monto siempre se guarda con IVA
+  }
+  return aNeto(it.precio, it.factura, it.precioTipo, iva);
+}
 export function costBase(it) { // costo por kg / litro / unidad, después de merma; sin IVA si hay factura
-  if (!it) return 0; const p = it.factura ? it.precio / (1 + S().iva) : it.precio;
+  if (!it) return 0; const p = precioCosto(it);
   const c = it.contenido > 0 ? it.contenido : 1, r = 1 - (it.merma || 0);
   return p / c / (r > 0 ? r : 1);
 }

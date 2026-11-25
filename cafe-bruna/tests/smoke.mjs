@@ -57,7 +57,7 @@ try {
 
   await test('instalación nueva: abre el asistente sin errores', async () => {
     assert.equal(await page.locator('.wiz-title').innerText(), 'Bienvenido');
-    assert.equal(await page.evaluate('D.v'), 3);
+    assert.equal(await page.evaluate('D.v'), 4);
   });
 
   await test('costeo: receta, merma, comisión y precio sugerido', async () => {
@@ -113,7 +113,7 @@ try {
     await d2.ctx.close();
   });
 
-  await test('migración de datos v1 (reventa en la carta) a v3', async () => {
+  await test('migración de datos v1 (reventa en la carta) a v4', async () => {
     const { ctx: c3, page: p3, errors: e3 } = await newPage(browser);
     await p3.goto(URL);
     const today = await p3.evaluate('today()');
@@ -131,13 +131,45 @@ try {
     }, [today]);
     await p3.reload();
     const r = await p3.evaluate(() => ({ v: D.v, u: dayOf(UI.fecha).u, m8: byId('menu', 'm8').deleted, alf: byId('items', 'i12'), rec: byId('menu', 'm3').receta, teo: dayTeorico(dayOf(UI.fecha)) }));
-    assert.equal(r.v, 3); assert.equal(r.m8, true);
+    assert.equal(r.v, 4); assert.equal(r.m8, true);
+    assert.equal(await p3.evaluate("byId('items', 'i1').precioTipo"), 'bruto', 'los precios antiguos quedan como bruto (con IVA)');
     assert.deepEqual(r.u, { m3: 1, i12: 2 });
     assert.equal(r.alf.venta, true); assert.equal(r.alf.precioVenta, 2000);
     assert.deepEqual(r.rec, [{ itemId: 'i1', qty: 10 }]);
     assert.equal(r.teo, 5900);
     assert.deepEqual(e3, []);
     await c3.close();
+  });
+
+  await test('precios neto/bruto: insumos, gastos y promedio ponderado de compras', async () => {
+    const { ctx: c4, page: p4, errors: e4 } = await newPage(browser);
+    await p4.goto(URL);
+    // insumo: el mismo precio $25.000 con factura, como bruto o como neto
+    const c = await p4.evaluate(() => { const i = byId('items', 'i1'); const bruto = costBase(i); i.precioTipo = 'neto'; const neto = costBase(i); i.precioTipo = 'bruto'; return { bruto, neto, f: budget().cats.cafe.bruto, f2: (i.precioTipo = 'neto', budget().cats.cafe.bruto) }; });
+    near(c.bruto, 25000 / 1.19 / 0.95, 0.01, 'bruto: se le saca el IVA');
+    near(c.neto, 25000 / 0.95, 0.01, 'neto: ya viene sin IVA');
+    near(c.f2 - c.f, 25000 * 5 * 0.19, 1, 'el presupuesto suma el IVA al neto: 5 compras al mes × $25.000 × 19%');
+    await p4.evaluate(() => { byId('items', 'i1').precioTipo = 'bruto'; });
+    // gasto: 2 kg a $25.000 c/u, escrito sin IVA → se registra y se paga con IVA
+    for (let i = 0; i < 6; i++) await p4.click('[data-act=wNext]');
+    await p4.click('[data-act=tab][data-k=gastos]'); await p4.click('[data-act=gNew]');
+    await p4.click('[data-act=gCat][data-k=cafe]'); await p4.click('.item-btn:has-text("Café en grano")');
+    await p4.fill('[data-bind="g::cant:dec"]', '2');
+    await p4.selectOption('[data-bind="g::tipo:text"]', 'neto');
+    await p4.click('[data-act=gSave]');
+    let r = await p4.evaluate(() => { const x = real(thisMonth()), e = x.exps[0]; return { monto: e.monto, ing: e.ingresado, tipo: e.tipo, neto: x.cats.cafe.neto, cb: costBase(byId('items', 'i1')) }; });
+    assert.equal(r.monto, 59500); assert.equal(r.ing, 50000); assert.equal(r.tipo, 'neto');
+    near(r.neto, 50000, 0.01, 'el costo del gasto es el neto');
+    near(r.cb, 25000 / 0.95, 0.01, 'costo del café = promedio de las compras (neto $25.000/kg)');
+    // segunda compra de 1 kg más cara: el costo pasa a ser el promedio ponderado por cantidad
+    await p4.click('[data-act=gNew]'); await p4.click('[data-act=gCat][data-k=cafe]'); await p4.click('.item-btn:has-text("Café en grano")');
+    await p4.fill('[data-bind="g::precio:clp"]', '31.000'); await p4.click('[data-act=gSave]');
+    r = await p4.evaluate(() => { const i = byId('items', 'i1'); const prom = costBase(i); S().usaCompras = false; const cat = costBase(i); return { prom, cat, tipo: i.precioTipo, precio: i.precio }; });
+    near(r.prom, (50000 + 31000) / 3 / 0.95, 0.01, 'promedio ponderado: (2 kg a 25.000 + 1 kg a 31.000) / 3 kg');
+    near(r.cat, 31000 / 0.95, 0.01, 'sin promedio: último precio del catálogo (neto)');
+    assert.equal(r.tipo, 'neto');
+    assert.deepEqual(e4, []);
+    await c4.close();
   });
 
   assert.deepEqual(errors, [], 'sin errores de JavaScript');

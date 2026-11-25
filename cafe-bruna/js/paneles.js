@@ -2,10 +2,11 @@
 import { pinEditor } from './asistente.js';
 import { CATS, COBROS, ITEM_CATS, MEDIOS } from './constantes.js';
 import { dosisReceta, sellables } from './costeo.js';
+import { aBruto, aNeto } from './iva.js';
 import { cajaEditor, fixedEditor, itemsEditor, menuEditor, paramsEditor, syncEditor } from './editores.js';
 import { G, S, UI, dayOf, dayTotal, live } from './estado.js';
 import { budget, equilibrio, flujo, pl, real } from './finanzas.js';
-import { catPill, fld, tgl } from './render.js';
+import { catPill, fld, sel, tgl } from './render.js';
 import { SYNC, ghCfg } from './sync.js';
 import { $, ICONS, clp, daysInMonth, dec, esc, fmtDay, icon, monthLabel, monthShort, nfmt, pad, pct, sum, thisMonth, today } from './util.js';
 
@@ -99,8 +100,9 @@ export function gastoModal() {
       <div class="mb-12">${fld('Concepto', 'g::concepto', 'text', G.concepto, 'placeholder="¿Qué compraste?"')}</div>
       <div class="grid3 mb-12"><label class="fld"><span>Fecha</span><input type="date" class="field-input" data-bind="g::fecha:text" value="${esc(G.fecha)}"></label>
         ${fld('Cantidad' + (G.unidad ? ` (${esc(G.unidad)})` : ''), 'g::cant', 'dec', G.cant)}${fld('Precio unitario', 'g::precio', 'clp', G.precio)}</div>
-      <div class="mb-12">${fld('Total pagado (con IVA)', 'g::monto', 'clp', G.monto, 'style="font-size:20px;font-weight:600"')}</div>
+      <div class="mb-12">${fld(G.factura && G.tipo === 'neto' ? 'Total (sin IVA)' : 'Total pagado (con IVA)', 'g::monto', 'clp', G.monto, 'style="font-size:20px;font-weight:600"')}</div>
       <div class="mb-12">${tgl('g::factura', G.factura, 'Con factura (el IVA se descuenta en el F29)')}</div>
+      ${G.factura ? `<div class="mb-12"><label class="fld"><span>Los montos que escribes están…</span>${sel('g::tipo', G.tipo || 'bruto', { bruto: 'Incluye IVA (bruto)', neto: 'Sin IVA (neto)' })}</label>${G.tipo === 'neto' ? `<div class="muted mt-8">Se registra y se paga: <b>${clp(aBruto(G.monto, true, 'neto', S().iva))}</b> con IVA</div>` : ''}</div>` : ''}
       <div class="fld mb-8"><span>Medio de pago</span></div><div class="chips mb-12">${Object.entries(MEDIOS).map(([k, n]) => `<button class="chip ${G.medio === k ? 'on' : ''}" data-act="gMedio" data-k="${k}">${n}</button>`).join('')}</div>
       <div class="mb-16">${fld('Proveedor / nota', 'g::nota', 'text', G.nota, 'placeholder="Opcional"')}</div>
       <button class="btn-primary mb-8" data-act="gSave">Guardar gasto</button>
@@ -123,7 +125,7 @@ export function panelMes() {
   const fl = flujo().find(x => x.mk === mk);
   const cafDia = r.dias ? r.cafes / r.dias : 0;
   const renta = live('fixed').find(f => /renta|arriendo/i.test(f.nombre));
-  const rentaNeto = renta ? (renta.factura ? renta.monto / (1 + s.iva) : renta.monto) : 0;
+  const rentaNeto = renta ? aNeto(renta.monto, renta.factura, renta.montoTipo, s.iva) : 0;
   const gpt = r.cafes ? r.granoKg * 1000 / r.cafes : null, dr = dosisReceta(), gi = live('items').find(i => i.grano), mermaG = gi && gi.merma < 1 ? gi.merma : 0;
   const ivaPerdido = sum(r.exps.filter(x => !x.factura && ITEM_CATS.includes(x.cat)), x => x.monto) * s.iva / (1 + s.iva);
   const dif = r.hasUnits ? r.bruto - r.teorico : null;

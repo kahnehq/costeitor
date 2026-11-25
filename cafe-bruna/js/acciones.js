@@ -2,6 +2,7 @@
 import { WSTEPS } from './asistente.js';
 import { CATS, LS_DATA, LS_PIN, LS_SYNC, MEDIOS } from './constantes.js';
 import { consumo } from './costeo.js';
+import { aBruto } from './iva.js';
 import { defaults } from './defaults.js';
 import { D, G, S, UI, byId, dayUnits, live, migrate, nextOrd, setD, setG, touch, upsertDay } from './estado.js';
 import { real } from './finanzas.js';
@@ -17,9 +18,9 @@ export const ACTS = {
   rm: el => { const o = byId(el.dataset.k, el.dataset.id); if (!o) return; if (!confirm(`¿Quitar “${o.nombre}”?`)) return; o.deleted = true; o.updatedAt = now(); touch(); rerender(); },
   add: el => {
     const k = el.dataset.k, base = { id: uid(), ord: nextOrd(k), updatedAt: now(), deleted: false };
-    if (k === 'fixed') D.fixed.push({ ...base, nombre: '', monto: 0, factura: false, tipo: 'fijo' });
+    if (k === 'fixed') D.fixed.push({ ...base, nombre: '', monto: 0, montoTipo: 'bruto', factura: false, tipo: 'fijo' });
     if (k === 'menu') D.menu.push({ ...base, nombre: '', cat: 'cafe', precio: 0, extra: 0, receta: [], esperado: 0, por: 'dia' });
-    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, venta: el.dataset.cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ub: 'und', contenido: 1, merma: 0 });
+    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, precioTipo: 'bruto', mensual: 0, factura: false, grano: false, venta: el.dataset.cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ub: 'und', contenido: 1, merma: 0 });
     touch(); rerender(); setTimeout(() => { const i = document.querySelector(`[data-bind="${k}:${base.id}:nombre:text"]`); i && i.focus(); }, 30);
   },
   recAdd: el => { const m = byId('menu', el.dataset.id); m.receta = m.receta || []; m.receta.push({ itemId: '', qty: 0 }); m.updatedAt = now(); touch(); rerender(); },
@@ -45,27 +46,29 @@ export const ACTS = {
     const id = el.dataset.id, fx = byId('fixed', id), it = byId('items', id);
     const fecha = UI.month === thisMonth() ? today() : UI.month + '-01';
     Object.assign(G, { step: 'form', itemId: id || null, fecha, medio: G.medio || 'deb', nota: '', editId: null });
-    if (fx) Object.assign(G, { concepto: fx.nombre, cant: 1, precio: fx.monto, monto: fx.monto, factura: fx.factura, unidad: '' });
-    else if (it) Object.assign(G, { concepto: it.nombre, cant: 1, precio: it.precio, monto: it.precio, factura: it.factura, unidad: it.unidad });
-    else Object.assign(G, { concepto: G.cat === 'retiro' ? 'Retiro del dueño' : '', cant: 1, precio: 0, monto: 0, factura: false, unidad: '' });
+    if (fx) Object.assign(G, { concepto: fx.nombre, cant: 1, precio: fx.monto, monto: fx.monto, factura: fx.factura, tipo: fx.montoTipo || 'bruto', unidad: '' });
+    else if (it) Object.assign(G, { concepto: it.nombre, cant: 1, precio: it.precio, monto: it.precio, factura: it.factura, tipo: it.precioTipo || 'bruto', unidad: it.unidad });
+    else Object.assign(G, { concepto: G.cat === 'retiro' ? 'Retiro del dueño' : '', cant: 1, precio: 0, monto: 0, factura: false, tipo: 'bruto', unidad: '' });
     rerender(); setTimeout(() => { const i = $('[data-bind="g::' + (id ? 'cant' : 'concepto') + ':' + (id ? 'dec' : 'text') + '"]'); i && i.focus(); i && i.select && i.select(); }, 30);
   },
   gMedio: el => { G.medio = el.dataset.k; rerender(); },
   gSave: () => {
     if (!G.concepto || !G.concepto.trim()) return toast('Escribe un concepto');
     if (!G.monto) return toast('Falta el monto');
-    const rec = { cat: G.cat, itemId: G.itemId, concepto: G.concepto.trim(), cant: G.cant || 0, unidad: G.unidad || '', precio: G.precio || 0, monto: G.monto, factura: !!G.factura, medio: G.medio, nota: G.nota || '', fecha: G.fecha, updatedAt: now(), deleted: false };
+    const tipo = G.factura && G.tipo === 'neto' ? 'neto' : 'bruto';
+    // monto = lo que se pagó (con IVA); ingresado/tipo recuerdan cómo lo escribiste para poder editarlo
+    const rec = { cat: G.cat, itemId: G.itemId, concepto: G.concepto.trim(), cant: G.cant || 0, unidad: G.unidad || '', precio: G.precio || 0, monto: aBruto(G.monto, !!G.factura, tipo, S().iva), ingresado: G.monto, tipo, factura: !!G.factura, medio: G.medio, nota: G.nota || '', fecha: G.fecha, updatedAt: now(), deleted: false };
     if (G.editId) Object.assign(byId('expenses', G.editId), rec); else D.expenses.push({ id: uid(), ...rec });
-    if (G.itemId && G.precio && !G.editId) { const it = byId('items', G.itemId); if (it && it.precio !== G.precio) { it.precio = G.precio; it.updatedAt = now(); } }
+    if (G.itemId && G.precio && !G.editId) { const it = byId('items', G.itemId); if (it && (it.precio !== G.precio || (G.factura && it.precioTipo !== tipo))) { it.precio = G.precio; if (G.factura) it.precioTipo = tipo; it.updatedAt = now(); } }
     UI.month = G.fecha.slice(0, 7); setG({ open: false }); touch(); rerender(); toast('Gasto guardado');
   },
-  gEdit: el => { const e = byId('expenses', el.dataset.id); if (!e) return; setG({ open: true, step: 'form', editId: e.id, ...JSON.parse(JSON.stringify(e)) }); G.open = true; G.step = 'form'; G.editId = e.id; rerender(); },
+  gEdit: el => { const e = byId('expenses', el.dataset.id); if (!e) return; setG({ open: true, step: 'form', editId: e.id, ...JSON.parse(JSON.stringify(e)) }); if (e.ingresado !== undefined) { G.monto = e.ingresado; } G.tipo = e.tipo || 'bruto'; G.open = true; G.step = 'form'; G.editId = e.id; rerender(); },
   gDel: () => { if (!confirm('¿Eliminar este gasto?')) return; const e = byId('expenses', G.editId); e.deleted = true; e.updatedAt = now(); setG({ open: false }); touch(); rerender(); toast('Gasto eliminado'); },
   loadFixed: () => {
     const mk = UI.month, exps = real(mk).exps, pend = live('fixed').filter(f => f.monto > 0 && !exps.some(e => e.itemId === f.id));
     if (!pend.length) return toast('Los costos fijos de este mes ya están registrados');
     if (!confirm(`Registrar ${pend.length} costos fijos en ${monthLabel(mk)} por ${clp(sum(pend, f => f.monto))}?\nPuedes editar cada uno después.`)) return;
-    pend.forEach(f => D.expenses.push({ id: uid(), cat: f.tipo === 'prestamo' ? 'prestamo' : 'fijo', itemId: f.id, concepto: f.nombre, cant: 1, unidad: '', precio: f.monto, monto: f.monto, factura: f.factura, medio: 'deb', nota: '', fecha: mk + '-01', updatedAt: now(), deleted: false }));
+    pend.forEach(f => D.expenses.push({ id: uid(), cat: f.tipo === 'prestamo' ? 'prestamo' : 'fijo', itemId: f.id, concepto: f.nombre, cant: 1, unidad: '', precio: f.monto, monto: aBruto(f.monto, f.factura, f.montoTipo, S().iva), ingresado: f.monto, tipo: f.montoTipo || 'bruto', factura: f.factura, medio: 'deb', nota: '', fecha: mk + '-01', updatedAt: now(), deleted: false }));
     touch(); rerender(); toast('Costos fijos registrados');
   },
   // sync

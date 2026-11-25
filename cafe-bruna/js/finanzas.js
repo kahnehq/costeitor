@@ -2,6 +2,7 @@
 import { COBROS } from './constantes.js';
 import { costBase, costMenu, costoTeorico } from './costeo.js';
 import { D, S, byId, dayTeorico, dayTotal, dayUnits, live } from './estado.js';
+import { aBruto } from './iva.js';
 import { addMonths, sum } from './util.js';
 
 /* ═══════════════ CÁLCULOS ═══════════════ */
@@ -16,8 +17,8 @@ export function budget() {
   live('items').filter(i => i.venta).forEach(i => { const u = unitsMes(i); bruto += u * (i.precioVenta || 0); units += u; });
   const med = {}; COBROS.forEach(([k]) => med[k] = bruto * (s.mix[k] || 0));
   const cats = {};
-  live('fixed').forEach(f => addCat(cats, f.tipo === 'prestamo' ? 'prestamo' : 'fijo', f.monto, f.factura));
-  live('items').forEach(i => addCat(cats, i.cat, i.precio * i.mensual, i.factura));
+  live('fixed').forEach(f => addCat(cats, f.tipo === 'prestamo' ? 'prestamo' : 'fijo', aBruto(f.monto, f.factura, f.montoTipo, s.iva), f.factura));
+  live('items').forEach(i => addCat(cats, i.cat, aBruto(i.precio, i.factura, i.precioTipo, s.iva) * i.mensual, i.factura));
   if (s.retiro) addCat(cats, 'retiro', s.retiro, false);
   const granoKg = sum(live('items').filter(i => i.grano), i => i.mensual * (i.contenido || 1));
   const costoTeo = sum(live('menu'), p => unitsMes(p) * costMenu(p)) + sum(live('items').filter(i => i.venta), i => unitsMes(i) * costBase(i));
