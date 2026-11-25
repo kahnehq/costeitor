@@ -115,6 +115,12 @@
   .btn-rm { width: 32px; height: 32px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--white); color: var(--gray-400); cursor: pointer; font-size: 18px; line-height: 1; flex-shrink: 0; }
   .btn-rm:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
   .group-h { font-size: 12px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .rec-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 80px 32px; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .rec-q { display: flex; align-items: center; gap: 6px; } .rec-q span { font-size: 12px; color: var(--gray-400); width: 26px; }
+  .rec-c { text-align: right; font-size: 13px; color: var(--green-dark); font-variant-numeric: tabular-nums; }
+  .rec-foot { display: flex; gap: 12px; align-items: end; justify-content: space-between; flex-wrap: wrap; margin-top: 4px; }
+  .rec-foot .fld { width: 220px; }
+  @media (max-width: 520px) { .rec-row { grid-template-columns: minmax(0, 1fr) 92px 32px; } .rec-c { display: none; } }
   .total-line { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 0; border-top: 1px solid var(--gray-100); margin-top: 6px; font-size: 14px; }
   .total-line b { font-size: 17px; font-variant-numeric: tabular-nums; }
 
@@ -290,13 +296,22 @@ const ICONS = {
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
 
 /* ═══════════════ DATOS POR DEFECTO ═══════════════ */
+/* Recetas base (como en Costeitor: cantidad usada × precio por unidad de compra). i1 = café en grano, i5 = té en bolsita, i19 = vaso 8 oz */
+const DEF_RECETAS = {
+  m1: [{ itemId: 'i1', qty: 10 }], m2: [{ itemId: 'i1', qty: 10 }], m3: [{ itemId: 'i1', qty: 10 }],
+  m4: [{ itemId: 'i1', qty: 10 }], m5: [{ itemId: 'i1', qty: 10 }], m6: [{ itemId: 'i5', qty: 1 }, { itemId: 'i19', qty: 1 }]
+};
+/* medida de compra: ub = kg | l | und (la receta usa g, ml o und), contenido = cuánto trae cada compra, merma = pérdida */
+const MEDIDAS = { 'Café en grano': ['kg', 1, 0.05], 'Café descafeinado': ['kg', 1, 0.05], 'Leche': ['l', 1, 0], 'Leche de almendras': ['l', 1, 0], 'Agua (bidón 20 L)': ['l', 20, 0], 'Preparado de helado Calo': ['l', 1, 0] };
+const defMedida = n => { const m = MEDIDAS[n] || ['und', 1, 0]; return { ub: m[0], contenido: m[1], merma: m[2] }; };
+const UB = { kg: { n: 'kilo', r: 'g', f: 1000 }, l: { n: 'litro', r: 'ml', f: 1000 }, und: { n: 'unidad', r: 'und', f: 1 } };
 function defaults() {
   const e = (o, i) => ({ ord: i, updatedAt: 0, deleted: false, ...o });
   return {
-    v: 2,
+    v: 3,
     settings: {
       updatedAt: 0, setupDone: false, nombre: 'Café de Bruna', inicio: thisMonth(), dias: 26,
-      iva: 0.19, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10,
+      iva: 0.19, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10, margenObj: 2,
       cajaInicial: 0, f29Pendiente: 0, remanente: 0, retiro: 0,
       mix: { ef: 0.25, tuu: 0.35, mpd: 0.25, mpc: 0.15, tr: 0 }
     },
@@ -309,7 +324,7 @@ function defaults() {
       ['Espresso', 'cafe', 1500, 2, 'dia', 250], ['Lungo', 'cafe', 1800, 1, 'dia', 250], ['Americano', 'cafe', 1900, 5, 'dia', 250],
       ['Cappuccino', 'cafe', 2000, 4, 'dia', 250], ['Latte macchiato', 'cafe', 2000, 3, 'dia', 250], ['Té en bolsita', 'te', 1000, 2, 'dia', 0],
       ['Helado', 'helado', 2000, 5, 'dia', 0]
-    ].map(([nombre, cat, precio, esperado, por, costo], i) => e({ id: 'm' + (i + 1), nombre, cat, precio, esperado, por, costo }, i)),
+    ].map(([nombre, cat, precio, esperado, por], i) => e({ id: 'm' + (i + 1), nombre, cat, precio, esperado, por, extra: 0, receta: DEF_RECETAS['m' + (i + 1)] || [] }, i)),
     items: [
       ['Café en grano', 'cafe', 'kg', 25000, 5, true, true], ['Café descafeinado', 'cafe', 'kg', 0, 0, true], ['Leche', 'cafe', 'litro', 0, 0, false],
       ['Leche de almendras', 'cafe', 'litro', 0, 0, false], ['Té en bolsita Selección', 'cafe', 'bolsita', 0, 52, false], ['Té en hoja', 'cafe', 'paquete', 0, 0, false],
@@ -322,7 +337,7 @@ function defaults() {
       ['Detergente', 'limpieza', 'unidad', 0, 0, false], ['Papel Nova', 'limpieza', 'paquete', 0, 0, false], ['Papel higiénico', 'limpieza', 'paquete', 0, 0, false],
       ['Limpia piso', 'limpieza', 'unidad', 0, 0, false], ['Limpia vidrios', 'limpieza', 'unidad', 0, 0, false], ['Limpia baños', 'limpieza', 'unidad', 0, 0, false],
       ['Esponjas', 'limpieza', 'paquete', 0, 0, false], ['Toallitas desinfectantes', 'limpieza', 'paquete', 0, 0, false]
-    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, mensual, factura, grano: !!grano, venta: cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana' }, i))
+    ].map(([nombre, cat, unidad, precio, mensual, factura, grano], i) => e({ id: 'i' + (i + 1), nombre, cat, unidad, precio, mensual, factura, grano: !!grano, venta: cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ...defMedida(nombre) }, i))
       .map(it => Object.assign(it, ({ 'Alfajores': { precioVenta: 2000, esperado: 10 }, 'Alfajores 2 sabores': { precioVenta: 3500, esperado: 5 } })[it.nombre] || {})),
     days: [],
     expenses: []
@@ -353,17 +368,55 @@ function migrate(d) {
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).map(w => w.replace(/(es|s)$/, '')).join(' ').trim();
   let changed = false;
   d.items.forEach(i => { if (i.venta === undefined) i.venta = false; if (i.precioVenta === undefined) i.precioVenta = 0; if (i.esperado === undefined) i.esperado = 0; if (!i.por) i.por = 'semana'; });
-  d.menu.forEach(m => { if (m.costo === undefined) m.costo = m.cat === 'cafe' ? 250 : 0; });
+  // v3: medidas de compra, merma y recetas
+  d.items.forEach(i => { if (i.ub === undefined) { const g = MEDIDAS[i.nombre] ? defMedida(i.nombre) : { ub: /kg|kilo/i.test(i.unidad) ? 'kg' : /litro|^l$|lt/i.test(i.unidad) ? 'l' : 'und', contenido: 1, merma: 0 }; Object.assign(i, g); } });
+  d.menu.forEach(m => {
+    if (m.receta === undefined) {
+      const okDef = DEF_RECETAS[m.id] && DEF_RECETAS[m.id].every(r => d.items.some(i => i.id === r.itemId && !i.deleted));
+      m.receta = okDef && m.cat !== 'reventa' ? JSON.parse(JSON.stringify(DEF_RECETAS[m.id])) : [];
+      m.extra = m.costo && m.costo !== 250 ? m.costo : 0; delete m.costo;
+    }
+  });
+  if (d.settings && d.settings.margenObj === undefined) d.settings.margenObj = 2;
   d.menu.filter(m => !m.deleted && m.cat === 'reventa').forEach(m => {
     let it = d.items.find(i => !i.deleted && i.fromMenu === m.id) || d.items.find(i => !i.deleted && norm(i.nombre) === norm(m.nombre));
-    if (!it) { it = { id: 'x' + m.id, ord: d.items.reduce((a, x) => Math.max(a, x.ord ?? 0), -1) + 1, nombre: m.nombre, cat: 'reventa', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, deleted: false }; d.items.push(it); }
+    if (!it) { it = { id: 'x' + m.id, ord: d.items.reduce((a, x) => Math.max(a, x.ord ?? 0), -1) + 1, nombre: m.nombre, cat: 'reventa', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, deleted: false, ...defMedida('') }; d.items.push(it); }
     Object.assign(it, { venta: true, precioVenta: m.precio || it.precioVenta || 0, esperado: m.esperado || 0, por: m.por || 'semana', fromMenu: m.id, updatedAt: now() });
     m.deleted = true; m.updatedAt = now(); changed = true;
   });
   const map = {}; d.items.forEach(i => { if (i.fromMenu) map[i.fromMenu] = i.id; });
   d.days.forEach(day => { if (!day.u) return; Object.keys(day.u).forEach(k => { if (map[k]) { day.u[map[k]] = (day.u[map[k]] || 0) + day.u[k]; delete day.u[k]; day.updatedAt = now(); changed = true; } }); });
-  if ((d.v || 1) < 2) { d.v = 2; changed = true; }
+  if ((d.v || 1) < 3) { d.v = 3; changed = true; }
   return changed;
+}
+/* ── costeo (lógica de Costeitor) ── */
+function costBase(it) { // costo por kg / litro / unidad, después de merma; sin IVA si hay factura
+  if (!it) return 0; const p = it.factura ? it.precio / (1 + S().iva) : it.precio;
+  const c = it.contenido > 0 ? it.contenido : 1, r = 1 - (it.merma || 0);
+  return p / c / (r > 0 ? r : 1);
+}
+const itemUB = it => UB[(it && it.ub) || 'und'];
+function costIng(ing) { const it = D.items.find(x => x.id === ing.itemId && !x.deleted); return it ? costBase(it) * (ing.qty || 0) / itemUB(it).f : 0; }
+function costMenu(p) { return sum(p.receta || [], costIng) + (p.extra || 0); }
+function costSell(id) { const m = D.menu.find(x => x.id === id); if (m) return costMenu(m); const i = D.items.find(x => x.id === id); return i ? costBase(i) : 0; }
+/* comisión promedio de cobro, como fracción del precio con IVA (según la mezcla de medios de pago); es costo si no hay factura por ella, también su IVA */
+function comPct() { const s = S(), g = (s.mix.tuu || 0) * s.tuu + (s.mix.mpd || 0) * s.mpd + (s.mix.mpc || 0) * s.mpc; return s.facturaCom ? g : g * (1 + s.iva); }
+/* precio con IVA tal que: precio/(1+IVA) − comisión = costo × (1 + margen objetivo) — redondeado a $100 */
+function sugerido(costo) { const s = S(), k = 1 / (1 + s.iva) - comPct(); return k > 0 ? Math.ceil(costo * (1 + s.margenObj) / k / 100) * 100 : 0; }
+/* consumo mensual de un insumo según recetas y ventas esperadas, en unidades de compra */
+function consumo(itemId) {
+  const it = byId('items', itemId); if (!it) return 0; let base = 0;
+  live('menu').forEach(p => (p.receta || []).forEach(r => { if (r.itemId === itemId) base += unitsMes(p) * (r.qty || 0) / itemUB(it).f; }));
+  if (it.venta) base += unitsMes(it);
+  const c = it.contenido > 0 ? it.contenido : 1, rm = 1 - (it.merma || 0);
+  return base / c / (rm > 0 ? rm : 1);
+}
+/* costo teórico de lo vendido en un conjunto de días (según recetas) */
+function costoTeorico(days) { return sum(days, d => sum(Object.entries(d.u || {}), ([id, n]) => costSell(id) * n)); }
+function dosisReceta() { // gramos promedio de grano por café según recetas
+  const gIds = new Set(live('items').filter(i => i.grano).map(i => i.id)); const cafes = live('menu').filter(p => p.cat === 'cafe');
+  const gs = cafes.map(p => sum((p.receta || []).filter(r => gIds.has(r.itemId)), r => r.qty || 0)).filter(x => x > 0);
+  return gs.length ? sum(gs) / gs.length : S().dosis;
 }
 /* lo que se puede vender en caja: la carta + insumos marcados “Se vende en caja” */
 function sellables() {
@@ -371,7 +424,8 @@ function sellables() {
           ...live('items').filter(i => i.venta).map(i => ({ id: i.id, nombre: i.nombre, precio: i.precioVenta || 0, cat: 'reventa', grupo: 'reventa' }))];
 }
 function sellById(id) { const m = D.menu.find(x => x.id === id); if (m) return { precio: m.precio, cat: m.cat }; const i = D.items.find(x => x.id === id); return i ? { precio: i.precioVenta || 0, cat: 'reventa' } : null; }
-function margen(precioVenta, costoNeto) { const vn = (precioVenta || 0) / (1 + S().iva); return { m: vn - costoNeto, p: vn > 0 ? (vn - costoNeto) / vn : null }; }
+/* margen de contribución por unidad, sin IVA: venta neta − costo de receta − comisión de cobro promedio */
+function margen(precioVenta, costoNeto) { const vn = (precioVenta || 0) / (1 + S().iva), com = (precioVenta || 0) * comPct(), m = vn - costoNeto - com; return { m, com, p: vn > 0 ? m / vn : null }; }
 function saveLocal() { localStorage.setItem(LS_DATA, JSON.stringify(D)); }
 function touch() { saveLocal(); if (ghCfg()) { SYNC.st = 'pend'; paintSync(); clearTimeout(touch._t); touch._t = setTimeout(sync, 3500); } }
 const S = () => D.settings;
@@ -406,8 +460,9 @@ function budget() {
   live('fixed').forEach(f => addCat(cats, f.tipo === 'prestamo' ? 'prestamo' : 'fijo', f.monto, f.factura));
   live('items').forEach(i => addCat(cats, i.cat, i.precio * i.mensual, i.factura));
   if (s.retiro) addCat(cats, 'retiro', s.retiro, false);
-  const granoKg = sum(live('items').filter(i => i.grano), i => i.mensual);
-  return { real: false, bruto, med, cats, cafes, cafeVal, tickets: units, dias: s.dias, granoKg, teorico: bruto, hasUnits: true };
+  const granoKg = sum(live('items').filter(i => i.grano), i => i.mensual * (i.contenido || 1));
+  const costoTeo = sum(live('menu'), p => unitsMes(p) * costMenu(p)) + sum(live('items').filter(i => i.venta), i => unitsMes(i) * costBase(i));
+  return { real: false, bruto, med, cats, cafes, cafeVal, tickets: units, dias: s.dias, granoKg, teorico: bruto, hasUnits: true, costoTeo };
 }
 function real(mk) {
   const days = D.days.filter(d => !d.deleted && d.fecha.startsWith(mk));
@@ -420,7 +475,8 @@ function real(mk) {
     real: true, days, exps, bruto, med, cats, tickets: sum(days, d => d.tickets || 0),
     cafes: sum(days, d => dayUnits(d, 'cafe')), units: sum(days, d => dayUnits(d)), teorico: sum(days, dayTeorico),
     hasUnits: days.some(d => dayUnits(d) > 0), dias: days.filter(d => dayTotal(d) > 0).length,
-    granoKg: sum(exps.filter(e => granoIds.has(e.itemId)), e => e.cant || 0), hasData: days.length + exps.length > 0
+    granoKg: sum(exps.filter(e => granoIds.has(e.itemId)), e => (e.cant || 0) * ((byId('items', e.itemId) || {}).contenido || 1)), hasData: days.length + exps.length > 0,
+    costoTeo: costoTeorico(days)
   };
 }
 function pl(x) {
@@ -439,9 +495,11 @@ function pl(x) {
 }
 function equilibrio() { // según estructura del presupuesto
   const b = budget(), p = pl(b), s = S();
-  const pe = p.mc > 0 ? p.fixedTot / p.mc : null;
+  // costo variable: el mayor entre recetas (consumo teórico) y compras planificadas — criterio conservador
+  const cvar = Math.max(p.costoVentas, b.costoTeo), mc = p.neto > 0 ? (p.neto - cvar - p.comCosto) / p.neto : null;
+  const pe = mc > 0 ? p.fixedTot / mc : null;
   const precioCafe = b.cafes > 0 ? b.cafeVal / b.cafes / (1 + s.iva) : null;
-  return { pe, cafesDia: pe && precioCafe ? pe / precioCafe / s.dias : null };
+  return { pe, mc, cvar, cafesDia: pe && precioCafe ? pe / precioCafe / s.dias : null };
 }
 function flujo() {
   const s = S(); let caja = s.cajaInicial, prevF29 = s.f29Pendiente, rem = s.remanente; const out = [];
@@ -498,6 +556,7 @@ function setVal(coll, id, field, v) {
   if (coll === 'sd') { SD[field] = v; return; }
   if (coll === 'settings') { const ks = field.split('.'); const last = ks.pop(); ks.reduce((o, k) => o[k], D.settings)[last] = v; D.settings.updatedAt = now(); touch(); return; }
   if (coll === 'day') { upsertDay(id)[field] = v; touch(); return; }
+  if (coll === 'rec' || coll === 'recit') { const m = byId('menu', id); const r = m && m.receta[+field]; if (!r) return; r[coll === 'rec' ? 'qty' : 'itemId'] = v; m.updatedAt = now(); touch(); return; }
   const o = byId(coll, id); if (!o) return; o[field] = v; o.updatedAt = now(); touch();
 }
 function parseBind(s) { const [coll, id, field, type] = s.split(':'); return { coll, id, field, type }; }
@@ -530,12 +589,19 @@ const LIVE = {
   equi: () => { const e = equilibrio(); return e.cafesDia ? dec(e.cafesDia, 1) + ' cafés/día' : '—'; },
   mg: (k, id) => {
     const o = byId(k, id); if (!o) return '';
-    const venta = k === 'menu' ? o.precio : o.precioVenta, costo = k === 'menu' ? (o.costo || 0) : (o.factura ? o.precio / (1 + S().iva) : o.precio);
-    if (!venta) return '<span class="muted">Pon el precio de venta para ver el margen</span>';
+    const venta = k === 'menu' ? o.precio : o.precioVenta, costo = k === 'menu' ? costMenu(o) : costBase(o);
+    const sg = costo > 0 ? ` · Precio sugerido (${pct(S().margenObj, 0)} sobre costo): <b>${clp(sugerido(costo))}</b>` : '';
+    if (!venta) return `<span class="muted">Costo ${clp(costo)}. Pon el precio de venta para ver el margen</span>${sg}`;
     const r = margen(venta, costo), t = r.p == null ? '' : r.p >= 0.6 ? 'ok-t' : r.p >= 0.35 ? 'warn-t' : 'bad-t';
-    return `Margen por unidad (sin IVA): <b class="${t}">${clp(r.m)} · ${pct(r.p, 0)}</b>`;
+    return `Costo <b>${clp(costo)}</b> + comisión de cobro ${clp(r.com)} · Margen por unidad (sin IVA): <b class="${t}">${clp(r.m)} · ${pct(r.p, 0)}</b>${sg}`;
   },
-  granoTaza: () => { const g = live('items').find(i => i.grano); return g && g.precio ? `Solo el grano: ${clp(g.precio * S().dosis / 1000)} por taza (${dec(S().dosis, 0)} g)` : ''; }
+  ic: (mid, idx) => { const p = byId('menu', mid); const r = p && p.receta[+idx]; return r ? clp(costIng(r)) : ''; },
+  cb: id => {
+    const it = byId('items', id); if (!it) return ''; const u = itemUB(it), cb = costBase(it);
+    if (!it.precio) return '<span class="muted">Pon el precio de compra para calcular el costo por receta</span>';
+    return `Costo real ${it.factura ? 'sin IVA' : 'con IVA'}${it.merma ? `, con ${pct(it.merma, 0)} de merma` : ''}: <b>${clp(cb)} por ${u.n}</b>${u.f > 1 ? ` · $${(cb / u.f).toFixed(1).replace('.', ',')} por ${u.r}` : ''}`;
+  },
+  cons: id => { const it = byId('items', id); const c = consumo(id); return c > 0 ? `Según tus recetas y ventas esperadas usas ~<b>${dec(c, 1)} ${esc(it.unidad || UB[it.ub].n)}</b> al mes · <button class="btn-link" data-act="useCons" data-id="${id}">Usar como compra al mes</button>` : ''; }
 };
 function refreshLive() { document.querySelectorAll('[data-live]').forEach(el => { const [k, ...args] = el.dataset.live.split(':'); const f = LIVE[k]; if (f) el.innerHTML = f(...args); }); }
 
@@ -574,14 +640,22 @@ function menuEditor() {
       <div class="erow-top">${input(`menu:${p.id}:nombre`, 'text', p.nombre, 'placeholder="Producto"')}<button class="btn-rm" data-act="rm" data-k="menu" data-id="${p.id}" title="Quitar">×</button></div>
       <div class="erow-fields">
         <label class="fld"><span>Tipo</span>${sel(`menu:${p.id}:cat`, p.cat, MENU_CATS)}</label>
-        ${fld('Precio de compra (costo)', `menu:${p.id}:costo`, 'clp', p.costo, 'placeholder="0"')}
         ${fld('Precio de venta (con IVA)', `menu:${p.id}:precio`, 'clp', p.precio, 'placeholder="0"')}
         ${fld('Venta esperada', `menu:${p.id}:esperado`, 'dec', p.esperado, 'placeholder="0"')}
         <label class="fld"><span>Por</span>${sel(`menu:${p.id}:por`, p.por, { dia: 'día', semana: 'semana' })}</label>
-      </div><div class="muted mt-12" data-live="mg:menu:${p.id}"></div></div>`).join('') +
-    `<div class="note info">El costo de una bebida es lo que te cuesta prepararla: grano, leche, vaso, tapa, azúcar. <span data-live="granoTaza"></span><br>Lo que compras y revendes tal cual (alfajores, barritas…) va en el <b>catálogo de insumos</b> con “Se vende en caja”.</div>
+      </div>
+      <div class="group-h">Receta (por unidad vendida)</div>
+      ${(p.receta || []).map((r, ix) => { const it = byId('items', r.itemId); return `<div class="rec-row">${itemSelect(p.id, ix, r.itemId)}<div class="rec-q">${input(`rec:${p.id}:${ix}`, 'dec', r.qty, 'placeholder="0"')}<span>${it ? itemUB(it).r : ''}</span></div><b class="rec-c" data-live="ic:${p.id}:${ix}"></b><button class="btn-rm" data-act="recRm" data-id="${p.id}" data-ix="${ix}" title="Quitar">×</button></div>`; }).join('')}
+      <div class="rec-foot"><button class="btn-link" data-act="recAdd" data-id="${p.id}">+ Ingrediente</button><label class="fld"><span>Otros costos variables por unidad</span>${input(`menu:${p.id}:extra`, 'clp', p.extra, 'placeholder="0"')}</label></div>
+      <div class="muted mt-12" data-live="mg:menu:${p.id}"></div></div>`).join('') +
+    `<div class="note info">Como en Costeitor: el costo de cada taza sale de su receta. Los precios de compra, el contenido de cada compra y la merma se configuran en el <b>catálogo de insumos</b>. Lo que revendes tal cual (alfajores, barritas…) va en el catálogo con “Se vende en caja”.<br>El margen descuenta la comisión promedio de TUU y Mercado Pago según tu mezcla de pagos. En “otros costos variables” no pongas luz ni arriendo: ya están en costos fijos.</div>
+     <div class="grid2 mb-12" style="max-width:360px">${fld('Margen objetivo sobre costo %', 'settings::margenObj', 'pct', S().margenObj)}</div>
      <button class="btn-secondary btn-sm" data-act="add" data-k="menu">+ Agregar producto preparado</button>
      <div class="total-line"><span>Venta mensual presupuestada (carta + reventa)</span><b data-live="menuTot"></b></div>`;
+}
+const costeable = i => !['limpieza', 'otros'].includes(i.cat) || i.venta;
+function itemSelect(mid, ix, v) {
+  return `<select class="field-input" data-bind="recit:${mid}:${ix}:text"><option value="">Elige un insumo…</option>${ITEM_CATS.map(c => { const its = live('items').filter(i => i.cat === c); return its.length ? `<optgroup label="${CATS[c].n}">${its.map(i => `<option value="${i.id}" ${i.id === v ? 'selected' : ''}>${esc(i.nombre || '(sin nombre)')}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>`;
 }
 function itemsEditor() {
   return ITEM_CATS.map(c => {
@@ -589,12 +663,16 @@ function itemsEditor() {
     return `<div class="group-h">${catPill(c)}</div>` + its.map(i => `<div class="erow">
         <div class="erow-top">${input(`items:${i.id}:nombre`, 'text', i.nombre, 'placeholder="Insumo"')}<button class="btn-rm" data-act="rm" data-k="items" data-id="${i.id}" title="Quitar">×</button></div>
         <div class="erow-fields">
+          ${fld('Se compra por', `items:${i.id}:unidad`, 'text', i.unidad, 'placeholder="bolsa 1 kg, bidón, paquete…"')}
           ${fld('Precio de compra (con IVA)', `items:${i.id}:precio`, 'clp', i.precio, 'placeholder="0"')}
-          ${fld('Unidad', `items:${i.id}:unidad`, 'text', i.unidad, 'placeholder="kg, litro…"')}
+          ${costeable(i) ? `<label class="fld"><span>Medida para recetas</span>${sel(`items:${i.id}:ub`, i.ub || 'und', { kg: 'Kilo → g', l: 'Litro → ml', und: 'Unidad' })}</label>
+          ${fld(`Contenido de cada compra (${{ kg: 'kg', l: 'litros', und: 'unidades' }[i.ub || 'und']})`, `items:${i.id}:contenido`, 'dec', i.contenido, 'placeholder="1"')}
+          ${fld('Merma %', `items:${i.id}:merma`, 'pct', i.merma)}` : ''}
           ${fld('Compra al mes', `items:${i.id}:mensual`, 'dec', i.mensual, 'placeholder="0"')}
           <div>${tgl(`items:${i.id}:factura`, i.factura, 'Con factura')}</div>
           <div>${tgl(`items:${i.id}:venta`, i.venta, 'Se vende en caja')}</div>
         </div>
+        ${costeable(i) ? `<div class="muted mt-12" data-live="cb:${i.id}"></div><div class="muted" data-live="cons:${i.id}"></div>` : ''}
         ${i.venta ? `<div class="erow-fields mt-12">
           ${fld('Precio de venta (con IVA)', `items:${i.id}:precioVenta`, 'clp', i.precioVenta, 'placeholder="0"')}
           ${fld('Venta esperada', `items:${i.id}:esperado`, 'dec', i.esperado, 'placeholder="0"')}
@@ -612,7 +690,7 @@ function paramsEditor() {
     <div class="gridauto mb-8">${COBROS.map(([k, n]) => fld(n + ' %', `settings::mix.${k}`, 'pct', s.mix[k])).join('')}</div>
     <div class="muted mb-12">Suma: <b data-live="mixSum"></b> (debe dar 100%)</div>
     <div class="group-h">Impuestos y operación</div>
-    <div class="gridauto">${fld('IVA %', 'settings::iva', 'pct', s.iva)}${fld('PPM %', 'settings::ppm', 'pct', s.ppm)}${fld('Días abiertos al mes', 'settings::dias', 'dec', s.dias)}${fld('Gramos de café por taza', 'settings::dosis', 'dec', s.dosis)}</div>
+    <div class="gridauto">${fld('IVA %', 'settings::iva', 'pct', s.iva)}${fld('PPM %', 'settings::ppm', 'pct', s.ppm)}${fld('Días abiertos al mes', 'settings::dias', 'dec', s.dias)}</div>
     <p class="muted mt-12">TUU: tasa plana 1,49% + IVA. Mercado Pago Point Smart 2: 2,19% débito y 2,69% crédito (bajo $2 MM/mes). PPM Pro Pyme General 0,25% (confírmalo con tu contador).</p>`;
 }
 function cajaEditor() {
@@ -644,8 +722,8 @@ function syncEditor() {
 const WSTEPS = [
   { t: 'Bienvenido', s: 'Configuremos tu cafetería en 5 pasos. Todo se puede cambiar después en Ajustes.' },
   { t: 'Costos fijos', s: 'Lo que pagas todos los meses, vendas o no. Marca si te dan factura: su IVA lo descuentas en el F29.' },
-  { t: 'Tu carta', s: 'Lo que preparas: costo, precio de venta con IVA y cuánto esperas vender. Con esto se arma el presupuesto y el punto de equilibrio.' },
-  { t: 'Insumos y compras', s: 'El catálogo para registrar gastos con dos toques. Marca “Se vende en caja” en lo que revendes (alfajores, barritas…) y ponle su precio de venta.' },
+  { t: 'Insumos y compras', s: 'Cómo compras cada cosa: precio, si viene por kilo, litro o unidad, cuánto trae y su merma. Marca “Se vende en caja” en lo que revendes (alfajores, barritas…).' },
+  { t: 'Carta y recetas', s: 'Cada producto con su receta: el costo por taza se calcula solo desde tus insumos. Agrega el precio de venta y cuánto esperas vender.' },
   { t: 'Cobros e impuestos', s: 'Comisiones de TUU y Mercado Pago, cómo te pagan los clientes, IVA y PPM.' },
   { t: 'Respaldo en GitHub', s: 'Opcional: guarda tus datos en un repositorio privado y úsalos desde cualquier Edge (PC o celular).' }
 ];
@@ -659,8 +737,8 @@ function wizardScreen() {
          ${S().setupDone ? '' : `<div class="divider">¿Ya usas la app en otro equipo?</div><button class="btn-secondary" data-act="wRecover">${icon(ICONS.cloud).replace('<svg', '<svg width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2"')} Recuperar mis datos desde GitHub</button>`}`;
   }
   else if (st === 1) body = fixedEditor();
-  else if (st === 2) body = menuEditor() + `<div class="note info mt-12">Equilibrio estimado: <b data-live="equi"></b> para no perder plata.</div>`;
-  else if (st === 3) body = itemsEditor();
+  else if (st === 2) body = itemsEditor();
+  else if (st === 3) body = menuEditor() + `<div class="note info mt-12">Equilibrio estimado: <b data-live="equi"></b> para no perder plata.</div>`;
   else if (st === 4) body = paramsEditor();
   else if (st === 5) body = syncEditor() + `<div class="divider">Seguridad</div>${pinEditor()}`;
   return `<div class="screen dark-bg"><div class="login-card wiz-card">
@@ -793,7 +871,7 @@ function panelMes() {
   const cafDia = r.dias ? r.cafes / r.dias : 0;
   const renta = live('fixed').find(f => /renta|arriendo/i.test(f.nombre));
   const rentaNeto = renta ? (renta.factura ? renta.monto / (1 + s.iva) : renta.monto) : 0;
-  const gpt = r.cafes ? r.granoKg * 1000 / r.cafes : null;
+  const gpt = r.cafes ? r.granoKg * 1000 / r.cafes : null, dr = dosisReceta(), gi = live('items').find(i => i.grano), mermaG = gi && gi.merma < 1 ? gi.merma : 0;
   const ivaPerdido = sum(r.exps.filter(x => !x.factura && ITEM_CATS.includes(x.cat)), x => x.monto) * s.iva / (1 + s.iva);
   const dif = r.hasUnits ? r.bruto - r.teorico : null;
   const tone = (v, good, warn, higherBetter = true) => v == null || !isFinite(v) ? '' : higherBetter ? (v >= good ? 'ok' : v >= warn ? 'warn' : 'bad') : (v <= good ? 'ok' : v <= warn ? 'warn' : 'bad');
@@ -813,7 +891,8 @@ function panelMes() {
     ${kpi('Costo de ventas', pct(cvp), 'Insumos, helado, reventa, desechables · ref. 25% – 35%', tone(cvp, 0.35, 0.45, false))}
     ${kpi('Comisiones', pct(comp), `${clp(pr.comBruto)} con IVA · ref. menos de 2,5%`, tone(comp, 0.025, 0.035, false))}
     ${kpi('Renta / ventas netas', pct(rp), 'Referencia: menos de 15%', tone(rp, 0.15, 0.3, false))}
-    ${kpi('Gramos por taza', gpt == null ? '—' : dec(gpt, 1) + ' g', `Dosis de la máquina: ${dec(s.dosis, 0)} g · ${dec(r.granoKg, 1)} kg comprados`, gpt == null ? '' : tone(gpt, s.dosis * 1.1, s.dosis * 1.3, false))}
+    ${kpi('Gramos por taza', gpt == null ? '—' : dec(gpt, 1) + ' g', `Receta: ${dec(dr, 0)} g + ${pct(mermaG, 0)} merma = ${dec(dr / (1 - mermaG), 1)} g · ${dec(r.granoKg, 1)} kg comprados`, gpt == null ? '' : tone(gpt, dr / (1 - mermaG) * 1.05, dr / (1 - mermaG) * 1.25, false))}
+    ${kpi('Costo según recetas', clp(r.costoTeo), r.hasUnits ? `De lo vendido · ${pct(pr.neto ? r.costoTeo / pr.neto : null)} de ventas netas · compras de insumos ${clp(pr.costoVentas)}` : 'Anota productos en la Caja para calcularlo', 'info')}
     ${kpi('Diferencia de caja', dif == null ? '—' : clp(dif), 'Cobrado vs. productos anotados', dif == null ? '' : Math.abs(dif) <= 2000 ? 'ok' : 'warn')}
     ${kpi('IVA perdido sin factura', clp(ivaPerdido), 'Pide factura en tus compras de insumos', ivaPerdido > 0 ? 'warn' : 'ok')}
     ${kpi('F29 a pagar el día 20', fl ? clp(fl.f29) : '—', fl ? `IVA ${clp(fl.ivaPagar)} + PPM ${clp(fl.p.ppm)} · ${fl.real ? 'real' : 'proyectado'}` : 'Fuera del período del flujo', 'info')}
@@ -865,8 +944,8 @@ function panelAjustes() {
   return `<div class="panel-title">Ajustes</div><div class="panel-sub">Configura tu negocio, respaldo y seguridad.</div>
   <div class="btn-row mb-16"><button class="btn-secondary" data-act="wOpen">Abrir el asistente paso a paso</button></div>
   ${sec('fijos', 'Costos fijos', ICONS.cash, fixedEditor())}
-  ${sec('carta', 'Carta y ventas esperadas', ICONS.cup, menuEditor())}
-  ${sec('insumos', 'Catálogo de insumos', ICONS.bag, itemsEditor())}
+  ${sec('insumos', 'Catálogo de insumos (compra, rendimiento y merma)', ICONS.bag, itemsEditor())}
+  ${sec('carta', 'Carta, recetas y precios', ICONS.cup, menuEditor())}
   ${sec('params', 'Cobros, comisiones e impuestos', ICONS.sliders, paramsEditor())}
   ${sec('caja', 'Negocio y caja inicial', ICONS.flow, `<div class="grid2 mb-12">${fld('Nombre del negocio', 'settings::nombre', 'text', S().nombre)}</div>` + cajaEditor())}
   ${sec('sync', 'Respaldo en GitHub', ICONS.cloud, syncEditor())}
@@ -884,10 +963,13 @@ const ACTS = {
   add: el => {
     const k = el.dataset.k, base = { id: uid(), ord: nextOrd(k), updatedAt: now(), deleted: false };
     if (k === 'fixed') D.fixed.push({ ...base, nombre: '', monto: 0, factura: false, tipo: 'fijo' });
-    if (k === 'menu') D.menu.push({ ...base, nombre: '', cat: 'cafe', precio: 0, costo: 0, esperado: 0, por: 'dia' });
-    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, venta: el.dataset.cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana' });
+    if (k === 'menu') D.menu.push({ ...base, nombre: '', cat: 'cafe', precio: 0, extra: 0, receta: [], esperado: 0, por: 'dia' });
+    if (k === 'items') D.items.push({ ...base, nombre: '', cat: el.dataset.cat || 'otros', unidad: 'unidad', precio: 0, mensual: 0, factura: false, grano: false, venta: el.dataset.cat === 'reventa', precioVenta: 0, esperado: 0, por: 'semana', ub: 'und', contenido: 1, merma: 0 });
     touch(); rerender(); setTimeout(() => { const i = document.querySelector(`[data-bind="${k}:${base.id}:nombre:text"]`); i && i.focus(); }, 30);
   },
+  recAdd: el => { const m = byId('menu', el.dataset.id); m.receta = m.receta || []; m.receta.push({ itemId: '', qty: 0 }); m.updatedAt = now(); touch(); rerender(); },
+  recRm: el => { const m = byId('menu', el.dataset.id); m.receta.splice(+el.dataset.ix, 1); m.updatedAt = now(); touch(); rerender(); },
+  useCons: el => { const it = byId('items', el.dataset.id); it.mensual = Math.round(consumo(it.id) * 10) / 10; it.updatedAt = now(); touch(); rerender(); toast('Compra mensual actualizada'); },
   // asistente
   wNext: () => { if (UI.wstep < WSTEPS.length - 1) { UI.wstep++; UI._keepScroll = false; render(); } else { S().setupDone = true; S().updatedAt = now(); touch(); UI.wizard = false; UI.wstep = 0; UI.tab = 'hoy'; UI._keepScroll = false; render(); toast('¡Listo! Ya puedes registrar tu caja'); } },
   wPrev: () => { UI.wstep = Math.max(0, UI.wstep - 1); UI._keepScroll = false; render(); },
