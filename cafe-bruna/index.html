@@ -308,7 +308,7 @@ const UB = { kg: { n: 'kilo', r: 'g', f: 1000 }, l: { n: 'litro', r: 'ml', f: 10
 function defaults() {
   const e = (o, i) => ({ ord: i, updatedAt: 0, deleted: false, ...o });
   return {
-    v: 2,
+    v: 3,
     settings: {
       updatedAt: 0, setupDone: false, nombre: 'Café de Bruna', inicio: thisMonth(), dias: 26,
       iva: 0.19, tuu: 0.0149, mpd: 0.0219, mpc: 0.0269, facturaCom: true, ppm: 0.0025, dosis: 10, margenObj: 2,
@@ -399,7 +399,10 @@ const itemUB = it => UB[(it && it.ub) || 'und'];
 function costIng(ing) { const it = D.items.find(x => x.id === ing.itemId && !x.deleted); return it ? costBase(it) * (ing.qty || 0) / itemUB(it).f : 0; }
 function costMenu(p) { return sum(p.receta || [], costIng) + (p.extra || 0); }
 function costSell(id) { const m = D.menu.find(x => x.id === id); if (m) return costMenu(m); const i = D.items.find(x => x.id === id); return i ? costBase(i) : 0; }
-const sugerido = costo => Math.ceil(costo * (1 + S().margenObj) * (1 + S().iva) / 100) * 100;
+/* comisión promedio de cobro, como fracción del precio con IVA (según la mezcla de medios de pago); es costo si no hay factura por ella, también su IVA */
+function comPct() { const s = S(), g = (s.mix.tuu || 0) * s.tuu + (s.mix.mpd || 0) * s.mpd + (s.mix.mpc || 0) * s.mpc; return s.facturaCom ? g : g * (1 + s.iva); }
+/* precio con IVA tal que: precio/(1+IVA) − comisión = costo × (1 + margen objetivo) — redondeado a $100 */
+function sugerido(costo) { const s = S(), k = 1 / (1 + s.iva) - comPct(); return k > 0 ? Math.ceil(costo * (1 + s.margenObj) / k / 100) * 100 : 0; }
 /* consumo mensual de un insumo según recetas y ventas esperadas, en unidades de compra */
 function consumo(itemId) {
   const it = byId('items', itemId); if (!it) return 0; let base = 0;
@@ -421,7 +424,8 @@ function sellables() {
           ...live('items').filter(i => i.venta).map(i => ({ id: i.id, nombre: i.nombre, precio: i.precioVenta || 0, cat: 'reventa', grupo: 'reventa' }))];
 }
 function sellById(id) { const m = D.menu.find(x => x.id === id); if (m) return { precio: m.precio, cat: m.cat }; const i = D.items.find(x => x.id === id); return i ? { precio: i.precioVenta || 0, cat: 'reventa' } : null; }
-function margen(precioVenta, costoNeto) { const vn = (precioVenta || 0) / (1 + S().iva); return { m: vn - costoNeto, p: vn > 0 ? (vn - costoNeto) / vn : null }; }
+/* margen de contribución por unidad, sin IVA: venta neta − costo de receta − comisión de cobro promedio */
+function margen(precioVenta, costoNeto) { const vn = (precioVenta || 0) / (1 + S().iva), com = (precioVenta || 0) * comPct(), m = vn - costoNeto - com; return { m, com, p: vn > 0 ? m / vn : null }; }
 function saveLocal() { localStorage.setItem(LS_DATA, JSON.stringify(D)); }
 function touch() { saveLocal(); if (ghCfg()) { SYNC.st = 'pend'; paintSync(); clearTimeout(touch._t); touch._t = setTimeout(sync, 3500); } }
 const S = () => D.settings;
@@ -457,7 +461,8 @@ function budget() {
   live('items').forEach(i => addCat(cats, i.cat, i.precio * i.mensual, i.factura));
   if (s.retiro) addCat(cats, 'retiro', s.retiro, false);
   const granoKg = sum(live('items').filter(i => i.grano), i => i.mensual * (i.contenido || 1));
-  return { real: false, bruto, med, cats, cafes, cafeVal, tickets: units, dias: s.dias, granoKg, teorico: bruto, hasUnits: true };
+  const costoTeo = sum(live('menu'), p => unitsMes(p) * costMenu(p)) + sum(live('items').filter(i => i.venta), i => unitsMes(i) * costBase(i));
+  return { real: false, bruto, med, cats, cafes, cafeVal, tickets: units, dias: s.dias, granoKg, teorico: bruto, hasUnits: true, costoTeo };
 }
 function real(mk) {
   const days = D.days.filter(d => !d.deleted && d.fecha.startsWith(mk));
@@ -490,9 +495,11 @@ function pl(x) {
 }
 function equilibrio() { // según estructura del presupuesto
   const b = budget(), p = pl(b), s = S();
-  const pe = p.mc > 0 ? p.fixedTot / p.mc : null;
+  // costo variable: el mayor entre recetas (consumo teórico) y compras planificadas — criterio conservador
+  const cvar = Math.max(p.costoVentas, b.costoTeo), mc = p.neto > 0 ? (p.neto - cvar - p.comCosto) / p.neto : null;
+  const pe = mc > 0 ? p.fixedTot / mc : null;
   const precioCafe = b.cafes > 0 ? b.cafeVal / b.cafes / (1 + s.iva) : null;
-  return { pe, cafesDia: pe && precioCafe ? pe / precioCafe / s.dias : null };
+  return { pe, mc, cvar, cafesDia: pe && precioCafe ? pe / precioCafe / s.dias : null };
 }
 function flujo() {
   const s = S(); let caja = s.cajaInicial, prevF29 = s.f29Pendiente, rem = s.remanente; const out = [];
@@ -586,7 +593,7 @@ const LIVE = {
     const sg = costo > 0 ? ` · Precio sugerido (${pct(S().margenObj, 0)} sobre costo): <b>${clp(sugerido(costo))}</b>` : '';
     if (!venta) return `<span class="muted">Costo ${clp(costo)}. Pon el precio de venta para ver el margen</span>${sg}`;
     const r = margen(venta, costo), t = r.p == null ? '' : r.p >= 0.6 ? 'ok-t' : r.p >= 0.35 ? 'warn-t' : 'bad-t';
-    return `Costo <b>${clp(costo)}</b> · Margen por unidad (sin IVA): <b class="${t}">${clp(r.m)} · ${pct(r.p, 0)}</b>${sg}`;
+    return `Costo <b>${clp(costo)}</b> + comisión de cobro ${clp(r.com)} · Margen por unidad (sin IVA): <b class="${t}">${clp(r.m)} · ${pct(r.p, 0)}</b>${sg}`;
   },
   ic: (mid, idx) => { const p = byId('menu', mid); const r = p && p.receta[+idx]; return r ? clp(costIng(r)) : ''; },
   cb: id => {
@@ -639,9 +646,9 @@ function menuEditor() {
       </div>
       <div class="group-h">Receta (por unidad vendida)</div>
       ${(p.receta || []).map((r, ix) => { const it = byId('items', r.itemId); return `<div class="rec-row">${itemSelect(p.id, ix, r.itemId)}<div class="rec-q">${input(`rec:${p.id}:${ix}`, 'dec', r.qty, 'placeholder="0"')}<span>${it ? itemUB(it).r : ''}</span></div><b class="rec-c" data-live="ic:${p.id}:${ix}"></b><button class="btn-rm" data-act="recRm" data-id="${p.id}" data-ix="${ix}" title="Quitar">×</button></div>`; }).join('')}
-      <div class="rec-foot"><button class="btn-link" data-act="recAdd" data-id="${p.id}">+ Ingrediente</button><label class="fld"><span>Otros costos por unidad (gas, luz…)</span>${input(`menu:${p.id}:extra`, 'clp', p.extra, 'placeholder="0"')}</label></div>
+      <div class="rec-foot"><button class="btn-link" data-act="recAdd" data-id="${p.id}">+ Ingrediente</button><label class="fld"><span>Otros costos variables por unidad</span>${input(`menu:${p.id}:extra`, 'clp', p.extra, 'placeholder="0"')}</label></div>
       <div class="muted mt-12" data-live="mg:menu:${p.id}"></div></div>`).join('') +
-    `<div class="note info">Como en Costeitor: el costo de cada taza sale de su receta. Los precios de compra, el contenido de cada compra y la merma se configuran en el <b>catálogo de insumos</b>. Lo que revendes tal cual (alfajores, barritas…) va en el catálogo con “Se vende en caja”.</div>
+    `<div class="note info">Como en Costeitor: el costo de cada taza sale de su receta. Los precios de compra, el contenido de cada compra y la merma se configuran en el <b>catálogo de insumos</b>. Lo que revendes tal cual (alfajores, barritas…) va en el catálogo con “Se vende en caja”.<br>El margen descuenta la comisión promedio de TUU y Mercado Pago según tu mezcla de pagos. En “otros costos variables” no pongas luz ni arriendo: ya están en costos fijos.</div>
      <div class="grid2 mb-12" style="max-width:360px">${fld('Margen objetivo sobre costo %', 'settings::margenObj', 'pct', S().margenObj)}</div>
      <button class="btn-secondary btn-sm" data-act="add" data-k="menu">+ Agregar producto preparado</button>
      <div class="total-line"><span>Venta mensual presupuestada (carta + reventa)</span><b data-live="menuTot"></b></div>`;
