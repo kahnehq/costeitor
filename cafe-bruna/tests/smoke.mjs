@@ -1,4 +1,4 @@
-// Pruebas de humo de la app Café de Bruna (cafe-bruna/index.html).
+// Pruebas de humo de la app Café de Bruna (cafe-bruna/index.html y js/*.js).
 // Uso:  cd cafe-bruna/tests && npm install && npx playwright install chromium && npm test
 // Con un Chrome ya instalado:  CHROME_PATH="/ruta/a/chrome" npm test
 // GitHub se simula: nunca se llama a la API real.
@@ -6,14 +6,26 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import http from 'node:http';
+import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const URL = 'file://' + path.resolve(here, '../index.html');
+// Los módulos ES no cargan desde file://, así que se sirve la carpeta cafe-bruna/ por HTTP local
+const root = path.resolve(here, '..');
+const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(new globalThis.URL(req.url, 'http://x').pathname); const f = path.join(root, rel.endsWith('/') ? rel + 'index.html' : rel);
+  if (!f.startsWith(root) || f.includes('node_modules') || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'content-type': TIPOS[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
+});
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const URL = 'http://127.0.0.1:' + server.address().port + '/index.html';
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: esperado ≈${b}, obtenido ${a}`);
 let passed = 0;
 const test = async (name, fn) => { await fn(); passed++; console.log('✔', name); };
 
 // GitHub simulado (API de contenidos): guarda el último PUT en memoria
+const nativos = [];
 const gh = { content: null, sha: null, puts: 0 };
 async function mockGitHub(ctx) {
   await ctx.route('https://fonts.googleapis.com/**', r => r.abort());
@@ -35,7 +47,7 @@ async function newPage(browser, viewport = { width: 1100, height: 900 }) {
   const ctx = await browser.newContext({ viewport }); await mockGitHub(ctx);
   const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  page.on('dialog', d => d.accept());
+  page.on('dialog', d => { nativos.push(d.message()); d.dismiss(); }); // la app ya no debe usar confirm()
   return { ctx, page, errors };
 }
 
@@ -46,7 +58,7 @@ try {
 
   await test('instalación nueva: abre el asistente sin errores', async () => {
     assert.equal(await page.locator('.wiz-title').innerText(), 'Bienvenido');
-    assert.equal(await page.evaluate('D.v'), 3);
+    assert.equal(await page.evaluate('D.v'), 4);
   });
 
   await test('costeo: receta, merma, comisión y precio sugerido', async () => {
@@ -80,7 +92,7 @@ try {
     await page.click('[data-act=tab][data-k=gastos]'); await page.click('[data-act=gNew]');
     await page.click('[data-act=gCat][data-k=cafe]'); await page.click('.item-btn:has-text("Café en grano")');
     await page.fill('[data-bind="g::cant:dec"]', '2'); await page.click('[data-act=gSave]');
-    await page.click('[data-act=loadFixed]');
+    await page.click('[data-act=loadFixed]'); await page.click('.dlg-actions .btn-primary');
     const r = await page.evaluate(() => { const x = real(thisMonth()); return { kg: x.granoKg, n: x.exps.length, cafe: x.cats.cafe.bruto }; });
     assert.equal(r.kg, 2); assert.equal(r.cafe, 50000); assert.equal(r.n, 5);
   });
@@ -102,7 +114,7 @@ try {
     await d2.ctx.close();
   });
 
-  await test('migración de datos v1 (reventa en la carta) a v3', async () => {
+  await test('migración de datos v1 (reventa en la carta) a v4', async () => {
     const { ctx: c3, page: p3, errors: e3 } = await newPage(browser);
     await p3.goto(URL);
     const today = await p3.evaluate('today()');
@@ -120,7 +132,8 @@ try {
     }, [today]);
     await p3.reload();
     const r = await p3.evaluate(() => ({ v: D.v, u: dayOf(UI.fecha).u, m8: byId('menu', 'm8').deleted, alf: byId('items', 'i12'), rec: byId('menu', 'm3').receta, teo: dayTeorico(dayOf(UI.fecha)) }));
-    assert.equal(r.v, 3); assert.equal(r.m8, true);
+    assert.equal(r.v, 4); assert.equal(r.m8, true);
+    assert.equal(await p3.evaluate("byId('items', 'i1').precioTipo"), 'bruto', 'los precios antiguos quedan como bruto (con IVA)');
     assert.deepEqual(r.u, { m3: 1, i12: 2 });
     assert.equal(r.alf.venta, true); assert.equal(r.alf.precioVenta, 2000);
     assert.deepEqual(r.rec, [{ itemId: 'i1', qty: 10 }]);
@@ -129,8 +142,150 @@ try {
     await c3.close();
   });
 
+  await test('precios neto/bruto: insumos, gastos y promedio ponderado de compras', async () => {
+    const { ctx: c4, page: p4, errors: e4 } = await newPage(browser);
+    await p4.goto(URL);
+    // insumo: el mismo precio $25.000 con factura, como bruto o como neto
+    const c = await p4.evaluate(() => { const i = byId('items', 'i1'); const bruto = costBase(i); i.precioTipo = 'neto'; const neto = costBase(i); i.precioTipo = 'bruto'; return { bruto, neto, f: budget().cats.cafe.bruto, f2: (i.precioTipo = 'neto', budget().cats.cafe.bruto) }; });
+    near(c.bruto, 25000 / 1.19 / 0.95, 0.01, 'bruto: se le saca el IVA');
+    near(c.neto, 25000 / 0.95, 0.01, 'neto: ya viene sin IVA');
+    near(c.f2 - c.f, 25000 * 5 * 0.19, 1, 'el presupuesto suma el IVA al neto: 5 compras al mes × $25.000 × 19%');
+    await p4.evaluate(() => { byId('items', 'i1').precioTipo = 'bruto'; });
+    // gasto: 2 kg a $25.000 c/u, escrito sin IVA → se registra y se paga con IVA
+    for (let i = 0; i < 6; i++) await p4.click('[data-act=wNext]');
+    await p4.click('[data-act=tab][data-k=gastos]'); await p4.click('[data-act=gNew]');
+    await p4.click('[data-act=gCat][data-k=cafe]'); await p4.click('.item-btn:has-text("Café en grano")');
+    await p4.fill('[data-bind="g::cant:dec"]', '2');
+    await p4.selectOption('[data-bind="g::tipo:text"]', 'neto');
+    await p4.click('[data-act=gSave]');
+    let r = await p4.evaluate(() => { const x = real(thisMonth()), e = x.exps[0]; return { monto: e.monto, ing: e.ingresado, tipo: e.tipo, neto: x.cats.cafe.neto, cb: costBase(byId('items', 'i1')) }; });
+    assert.equal(r.monto, 59500); assert.equal(r.ing, 50000); assert.equal(r.tipo, 'neto');
+    near(r.neto, 50000, 0.01, 'el costo del gasto es el neto');
+    near(r.cb, 25000 / 0.95, 0.01, 'costo del café = promedio de las compras (neto $25.000/kg)');
+    // segunda compra de 1 kg más cara: el costo pasa a ser el promedio ponderado por cantidad
+    await p4.click('[data-act=gNew]'); await p4.click('[data-act=gCat][data-k=cafe]'); await p4.click('.item-btn:has-text("Café en grano")');
+    await p4.fill('[data-bind="g::precio:clp"]', '31.000'); await p4.click('[data-act=gSave]');
+    r = await p4.evaluate(() => { const i = byId('items', 'i1'); const prom = costBase(i); S().usaCompras = false; const cat = costBase(i); return { prom, cat, tipo: i.precioTipo, precio: i.precio }; });
+    near(r.prom, (50000 + 31000) / 3 / 0.95, 0.01, 'promedio ponderado: (2 kg a 25.000 + 1 kg a 31.000) / 3 kg');
+    near(r.cat, 31000 / 0.95, 0.01, 'sin promedio: último precio del catálogo (neto)');
+    assert.equal(r.tipo, 'neto');
+    assert.deepEqual(e4, []);
+    await c4.close();
+  });
+
+  await test('diálogos propios: cancelar, Esc, confirmar y borrado total con palabra', async () => {
+    const { ctx: c5, page: p5, errors: e5 } = await newPage(browser, { width: 390, height: 844 });
+    await p5.goto(URL);
+    for (let i = 0; i < 6; i++) await p5.click('[data-act=wNext]');
+    await p5.click('[data-act=tab][data-k=gastos]'); await p5.click('[data-act=gNew]');
+    await p5.click('[data-act=gCat][data-k=otros]'); await p5.click('.item-btn:has-text("Otro")');
+    await p5.fill('[data-bind="g::concepto:text"]', 'Prueba'); await p5.fill('[data-bind="g::monto:clp"]', '1000'); await p5.click('[data-act=gSave]');
+    const vivos = () => p5.evaluate(() => D.expenses.filter(e => !e.deleted).length);
+    assert.equal(await vivos(), 1);
+    await p5.click('[data-act=gEdit]'); await p5.click('[data-act=gDel]');
+    assert.equal(await p5.locator('.dlg h3').innerText(), 'Eliminar gasto');
+    const caja = await p5.locator('.dlg').boundingBox();
+    near(caja.y + caja.height, 844, 1, 'a 390 px el diálogo es una hoja pegada abajo');
+    assert.equal(await p5.evaluate(() => document.activeElement.textContent), 'Cancelar', 'en acciones peligrosas el foco parte en Cancelar');
+    await p5.click('.dlg-actions .btn-secondary');
+    assert.equal(await p5.locator('.dlg').count(), 0); assert.equal(await vivos(), 1, 'cancelar no borra');
+    await p5.click('[data-act=gDel]'); await p5.keyboard.press('Escape');
+    assert.equal(await p5.locator('.dlg').count(), 0); assert.equal(await vivos(), 1, 'Esc cancela y no cierra el formulario de gasto');
+    assert.equal(await p5.locator('.modal').count(), 1);
+    await p5.click('[data-act=gDel]'); await p5.click('.dlg-actions .btn-primary');
+    assert.equal(await vivos(), 0, 'confirmar elimina');
+    // borrado total: exige escribir BORRAR
+    await p5.evaluate('void ACTS.wipe()');
+    assert.equal(await p5.locator('.dlg-actions .btn-primary').isDisabled(), true);
+    await p5.fill('.dlg input', 'borra'); assert.equal(await p5.locator('.dlg-actions .btn-primary').isDisabled(), true);
+    await p5.fill('.dlg input', 'borrar'); await p5.click('.dlg-actions .btn-primary');
+    assert.equal(await p5.evaluate('S().setupDone'), false, 'los datos se reinician');
+    assert.deepEqual(e5, []);
+    await c5.close();
+  });
+
+  await test('PWA: manifest, íconos, service worker, sin caché de api.github.com y uso sin conexión', async () => {
+    const { ctx: c6, page: p6, errors: e6 } = await newPage(browser);
+    await p6.goto(URL);
+    // manifest e íconos
+    const man = await p6.evaluate(async () => { const r = await fetch(document.querySelector('link[rel=manifest]').href); return r.json(); });
+    assert.equal(man.display, 'standalone'); assert.ok(man.name && man.short_name && man.start_url && man.scope);
+    for (const sz of ['192x192', '512x512']) assert.ok(man.icons.some(i => i.sizes === sz && i.type === 'image/png'), 'ícono ' + sz);
+    assert.ok(man.icons.some(i => i.purpose === 'maskable'), 'ícono maskable');
+    for (const i of man.icons) assert.equal(await p6.evaluate(async src => (await fetch(src)).status, i.src), 200, i.src);
+    // el service worker precachea TODOS los módulos (si agregas uno y no lo listas, esta prueba falla)
+    const swTxt = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+    for (const f of [...fs.readdirSync(path.join(root, 'js')).map(f => 'js/' + f), 'index.html', 'styles.css', 'manifest.webmanifest']) assert.ok(swTxt.includes("'./" + f + "'"), 'sw.js no lista ' + f);
+    await p6.evaluate(() => navigator.serviceWorker.ready);
+    await p6.reload(); // ahora la página queda controlada por el service worker
+    await p6.waitForFunction(() => navigator.serviceWorker.controller);
+    const cacheadas = await p6.evaluate(async () => { const out = []; for (const k of await caches.keys()) out.push(...(await (await caches.open(k)).keys()).map(r => r.url)); return out; });
+    assert.ok(cacheadas.some(u => u.endsWith('/js/costeo.js')) && cacheadas.some(u => u.endsWith('/index.html')), 'los archivos de la app están en caché');
+    // una llamada a api.github.com NO pasa por la caché
+    await p6.evaluate(() => fetch('https://api.github.com/repos/kahnehq/cafe-bruna-datos/contents/data/cafe-bruna.json', { headers: { Authorization: 'Bearer TEST' } }).catch(() => 0));
+    const despues = await p6.evaluate(async () => { const out = []; for (const k of await caches.keys()) out.push(...(await (await caches.open(k)).keys()).map(r => r.url)); return out; });
+    assert.deepEqual(despues.filter(u => !u.startsWith(URL.replace('/index.html', ''))), [], 'solo se cachean archivos del propio origen');
+    // sin conexión la app abre igual
+    await c6.setOffline(true);
+    await p6.reload();
+    assert.equal(await p6.locator('.wiz-title').innerText(), 'Bienvenido', 'abre sin conexión');
+    assert.deepEqual(e6, []);
+    await c6.close();
+  });
+
+  await test('conflictos de sincronización: se detectan, se muestran y se pueden recuperar', async () => {
+    // lógica pura
+    const base = { id: 'i1', nombre: 'Café', precio: 25000, updatedAt: 100 };
+    const hay = (l, r, desde) => page.evaluate(([l, r, d]) => detectarConflictos({ items: [l] }, { items: [r] }, d).length, [l, r, desde]);
+    assert.equal(await hay({ ...base, precio: 1, updatedAt: 300 }, { ...base, precio: 2, updatedAt: 200 }, 150), 1, 'ambos cambiaron después de la última sync');
+    assert.equal(await hay({ ...base, precio: 1, updatedAt: 120 }, { ...base, precio: 2, updatedAt: 200 }, 150), 0, 'solo cambió el otro equipo: es una actualización normal');
+    assert.equal(await hay({ ...base, precio: 2, updatedAt: 300 }, { ...base, precio: 2, updatedAt: 200 }, 150), 0, 'mismo contenido: no hay nada que pisar');
+    assert.equal(await hay({ ...base, updatedAt: 0 }, { ...base, precio: 2, updatedAt: 200 }, 0), 0, 'los datos por defecto (updatedAt 0) nunca chocan');
+
+    // dos equipos reales (GitHub simulado)
+    gh.content = null; gh.sha = null;
+    const A = await newPage(browser), B = await newPage(browser);
+    const conectar = async (pg) => {
+      await pg.click('[data-act=tab][data-k=ajustes]'); await pg.click('details[data-sec=sync] summary');
+      await pg.fill('[data-bind="sd::owner:text"]', 'kahnehq'); await pg.fill('[data-bind="sd::repo:text"]', 'cafe-bruna-datos'); await pg.fill('[data-bind="sd::token:text"]', 'github_pat_TEST');
+      await pg.click('[data-act=ghConnect]'); await pg.waitForFunction('SYNC.st === "ok"');
+    };
+    await A.page.goto(URL); for (let i = 0; i < 6; i++) await A.page.click('[data-act=wNext]'); await conectar(A.page);
+    await B.page.goto(URL); await B.page.click('[data-act=wRecover]');
+    await B.page.fill('[data-bind="sd::owner:text"]', 'kahnehq'); await B.page.fill('[data-bind="sd::repo:text"]', 'cafe-bruna-datos'); await B.page.fill('[data-bind="sd::token:text"]', 'github_pat_TEST');
+    await B.page.click('[data-act=ghConnect]'); await B.page.waitForFunction('S().setupDone === true');
+    await B.page.waitForTimeout(30);
+    // sin conflicto: A y B cambian cosas distintas
+    await A.page.evaluate("setVal('items', 'i1', 'precio', 26000)"); await A.page.waitForTimeout(30); await A.page.evaluate('sync(true)');
+    await B.page.evaluate("setVal('items', 'i9', 'precio', 5500)"); await B.page.evaluate('sync(true)');
+    assert.equal(await B.page.evaluate('CONF.length'), 0, 'cambios en cosas distintas no son conflicto');
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 26000);
+    // conflicto: A y B cambian el mismo insumo; B escribe último
+    await A.page.evaluate('sync(true)'); await B.page.evaluate('sync(true)'); await B.page.waitForTimeout(30);
+    await A.page.evaluate("setVal('items', 'i1', 'precio', 27000)"); await A.page.waitForTimeout(30); await A.page.evaluate('sync(true)');
+    await B.page.evaluate("setVal('items', 'i1', 'precio', 28000)"); await B.page.evaluate('sync(true)');
+    assert.equal(await B.page.evaluate('CONF.length'), 1);
+    assert.equal(await B.page.evaluate('CONF[0].gana'), 'local'); assert.deepEqual(await B.page.evaluate('CONF[0].campos'), ['precio']);
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 28000, 'gana el más reciente');
+    assert.match(await B.page.locator('.note:has-text("chocaron")').innerText(), /1 cambio/);
+    await B.page.click('[data-act=conflRevisar]');
+    const fila = await B.page.locator('.conf-tab tr:has-text("Precio de compra")').innerText();
+    assert.ok(/28000/.test(fila) && /27000/.test(fila), 'muestra lo que quedó y lo que se pisó: ' + fila);
+    // recuperar lo que se pisó
+    await B.page.click('[data-act=conflUsar]');
+    assert.equal(await B.page.evaluate("byId('items', 'i1').precio"), 27000, 'se recupera la versión pisada');
+    assert.equal(await B.page.evaluate('CONF.length'), 0); assert.equal(await B.page.locator('.modal').count(), 0);
+    await B.page.evaluate('sync(true)'); await A.page.evaluate('sync(true)');
+    assert.equal(await A.page.evaluate("byId('items', 'i1').precio"), 27000, 'la recuperación llega al otro equipo');
+    assert.equal(await A.page.evaluate('CONF.length'), 0, 'recuperar no genera otro conflicto en el otro equipo');
+    assert.equal(await B.page.evaluate("localStorage.getItem('bruna.conflictos.v1')"), '[]');
+    assert.deepEqual(A.errors, []); assert.deepEqual(B.errors, []);
+    await A.ctx.close(); await B.ctx.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
+  assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);
 } catch (e) {
   console.error('✘', e.message); process.exitCode = 1;
-} finally { await browser.close(); }
+} finally { await browser.close(); server.close(); }

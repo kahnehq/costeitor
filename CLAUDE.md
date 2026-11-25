@@ -1,6 +1,6 @@
 # Repositorio kahnehq/costeitor
 
-Dos apps web de un solo archivo, publicadas con GitHub Pages desde la rama `main`:
+Dos apps web estáticas (Costeitor en un solo archivo; Café de Bruna en módulos ES nativos), publicadas con GitHub Pages desde la rama `main`:
 
 | Carpeta | App | URL |
 | --- | --- | --- |
@@ -11,7 +11,7 @@ Cada app tiene sus propias instrucciones: lee `cafe-bruna/CLAUDE.md` antes de to
 
 ## Reglas comunes
 
-- **Sin build ni dependencias en tiempo de ejecución.** Todo es HTML + CSS + JS dentro de un `index.html`, con Google Fonts (DM Serif Display + DM Sans) como único recurso externo. No agregues frameworks, bundlers ni npm en la app. `npm` solo existe en `cafe-bruna/tests/`.
+- **Sin build ni dependencias en tiempo de ejecución.** Costeitor es un único `index.html`; Café de Bruna reparte HTML, CSS y módulos ES nativos (`<script type="module">`) en archivos estáticos, sin transpilar ni empaquetar. En ambas, con Google Fonts (DM Serif Display + DM Sans) como único recurso externo. No agregues frameworks, bundlers ni npm en la app. `npm` solo existe en `cafe-bruna/tests/`.
 - **Idioma:** interfaz, textos y mensajes de commit en español de Chile. Montos en CLP (`$1.234`, sin decimales), porcentajes con coma (`1,5%`).
 - **Estilo visual compartido:** variables CSS de Costeitor (`--green #1a9e72`, `--gray-800 #2a2724`, radios de 12 y 8 px, tarjetas blancas sobre `--gray-50`, barra de pestañas con íconos SVG de trazo). Mantén esa línea.
 - **Flujo de trabajo:** trabaja en una rama y abre un pull request hacia `main`. Carlos revisa y hace el merge; el merge publica el sitio. No hagas push directo a `main`.
