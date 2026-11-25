@@ -309,6 +309,38 @@ try {
     await c7.close();
   });
 
+  await test('datos por completar: detecta precios en $0 y recetas incompletas, y se va al completarlos', async () => {
+    const { ctx: c8, page: p8, errors: e8 } = await newPage(browser);
+    await p8.goto(URL);
+    for (let i = 0; i < 6; i++) await p8.click('[data-act=wNext]');
+    const ini = await p8.evaluate(() => pendientes().map(p => p.k + ':' + p.nivel));
+    assert.deepEqual(ini.filter(x => x.endsWith('critico')).sort(), ['leche:critico', 'precios:critico', 'recetas:critico'], 'instalación nueva: precios de té y vasos, helado sin receta y cappuccino/latte sin leche');
+    assert.ok(ini.includes('fijos:opcional') && ini.includes('otros:opcional'));
+    // aviso en Caja y detalle en Ajustes
+    await p8.click('[data-act=tab][data-k=hoy]');
+    assert.match(await p8.locator('.note:has-text("Faltan")').innerText(), /Faltan 3 datos/);
+    await p8.click('[data-act=verPend]');
+    assert.equal(await p8.locator('.pend.critico').count(), 3);
+    await p8.locator('.pend:has-text("Arma la receta") [data-act=irSec]').click();
+    assert.equal(await p8.locator('details[data-sec=carta]').getAttribute('open') !== null, true, '“Ir a completarlo” abre la sección de la carta');
+    // completar: precios, receta de helado y leche en cappuccino/latte
+    await p8.evaluate(() => {
+      const it = n => live('items').find(i => i.nombre.startsWith(n));
+      ['Té en bolsita', 'Vasos 8 oz', 'Preparado de helado', 'Leche'].forEach(n => setVal('items', it(n).id, 'precio', 1000));
+      setVal('items', it('Leche').id, 'precio', 1200);
+      live('items').filter(i => i.venta && !i.precio).forEach(i => setVal('items', i.id, 'precio', 800)); // reventa que se vende en caja (bollería, barritas…)
+      const leche = it('Leche').id, prep = it('Preparado de helado').id;
+      byId('menu', 'm4').receta.push({ itemId: leche, qty: 150 }); byId('menu', 'm5').receta.push({ itemId: leche, qty: 200 });
+      byId('menu', 'm7').receta.push({ itemId: prep, qty: 100 });
+    });
+    const fin = await p8.evaluate(() => criticos().map(p => p.k));
+    assert.deepEqual(fin, [], 'sin pendientes importantes: ' + JSON.stringify(fin));
+    await p8.click('[data-act=tab][data-k=hoy]');
+    assert.equal(await p8.locator('.note:has-text("Faltan")').count(), 0, 'desaparece el aviso');
+    assert.deepEqual(e8, []);
+    await c8.close();
+  });
+
   assert.deepEqual(errors, [], 'sin errores de JavaScript');
   assert.deepEqual(nativos, [], 'la app no abre diálogos nativos (confirm/alert)');
   console.log(`\n${passed} pruebas OK`);

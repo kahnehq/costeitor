@@ -86,6 +86,8 @@ Puedes editar cada uno después.`, ok: 'Registrar' })) return;
     SD.token = ''; if (UI.recover && S().setupDone) { UI.recover = false; UI.wizard = false; } rerender();
   },
   // conflictos de sincronización
+  verPend: () => { UI.tab = 'ajustes'; UI._keepScroll = false; render(); },
+  irSec: el => { const k = el.dataset.sec; UI.open[k] = true; UI._keepScroll = true; render(); const d = document.querySelector(`[data-sec="${k}"]`); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   diasAlcance: el => { UI.diasAlcance = el.dataset.k; rerender(); },
   conflRevisar: () => { UI.conf = true; rerender(); },
   conflCerrar: () => { UI.conf = false; rerender(); },

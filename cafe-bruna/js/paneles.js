@@ -8,6 +8,7 @@ import { D, G, S, UI, dayOf, dayTotal, live } from './estado.js';
 import { budget, equilibrio, flujo, pl, real } from './finanzas.js';
 import { catPill, fld, sel, tgl } from './render.js';
 import { ganadora, perdedora } from './conflictos.js';
+import { criticos, pendientes } from './pendientes.js';
 import { porDiaSemana, porMes, porTemporada } from './estacionalidad.js';
 import { CONF, SYNC, ghCfg } from './sync.js';
 import { $, ICONS, clp, daysInMonth, dec, esc, fmtDay, icon, monthLabel, monthShort, nfmt, pad, pct, sum, thisMonth, today } from './util.js';
@@ -25,7 +26,7 @@ export function appScreen() {
   return `<div class="screen">
     <header class="app-header"><div class="app-header-brand"><span class="logo-dot"></span>${esc(S().nombre)}</div><div id="sync-slot">${syncPill()}</div></header>
     <nav class="tab-bar">${TABS.map(([k, n, ic]) => `<button class="tab-btn ${UI.tab === k ? 'active' : ''}" data-act="tab" data-k="${k}">${icon(ic)}${n}</button>`).join('')}</nav>
-    <main class="app-content"><div class="wrap">${conflictBanner()}${panel}</div></main>
+    <main class="app-content"><div class="wrap">${conflictBanner()}${UI.tab === 'hoy' || UI.tab === 'mes' ? pendBanner() : ''}${panel}</div></main>
     ${G.open ? gastoModal() : ''}
     ${UI.conf ? conflictosModal() : ''}
   </div>`;
@@ -40,6 +41,18 @@ const fmtVal = v => v === undefined ? '—' : v === null ? '—' : typeof v === 
 export function etiquetaConf(c) {
   const e = ganadora(c); const n = c.k === 'days' ? 'Día ' + fmtDay(e.id) : c.k === 'settings' ? 'Ajustes' : (e.nombre || e.concepto || e.id);
   return (COL_N[c.k] || c.k) + ' · ' + n;
+}
+/* ── DATOS POR COMPLETAR ── */
+export function pendBanner() {
+  const c = criticos(); if (!c.length) return '';
+  return `<div class="note info">Faltan <b>${c.length} dato${c.length > 1 ? 's' : ''}</b> para que los costos y márgenes sean correctos. <button class="btn-link" data-act="verPend">Ver qué falta</button></div>`;
+}
+export function pendCard() {
+  const p = pendientes();
+  if (!p.length) return '<div class="note info mb-16">✓ Tu catálogo está completo: todos los insumos tienen precio y todos los productos tienen receta.</div>';
+  const c = p.filter(x => x.nivel === 'critico').length;
+  return `<div class="card"><div class="card-title">${icon(ICONS.sliders)} Para dejar la app lista${c ? ` · ${c} importante${c > 1 ? 's' : ''}` : ''}</div>
+    ${p.map(x => `<div class="pend ${x.nivel}"><div><span class="pend-tag">${x.nivel === 'critico' ? 'Importante' : 'Opcional'}</span> ${esc(x.texto)}</div><button class="btn-secondary btn-sm" data-act="irSec" data-sec="${x.sec}">Ir a completarlo</button></div>`).join('')}</div>`;
 }
 export function conflictBanner() {
   if (!CONF.length) return '';
@@ -248,6 +261,7 @@ export function panelFlujo() {
 export function sec(k, title, ic, body) { return `<details class="card" data-sec="${k}" ${UI.open[k] ? 'open' : ''}><summary class="card-title">${icon(ic)} ${title}</summary>${body}</details>`; }
 export function panelAjustes() {
   return `<div class="panel-title">Ajustes</div><div class="panel-sub">Configura tu negocio, respaldo y seguridad.</div>
+  ${pendCard()}
   <div class="btn-row mb-16"><button class="btn-secondary" data-act="wOpen">Abrir el asistente paso a paso</button></div>
   ${sec('fijos', 'Costos fijos', ICONS.cash, fixedEditor())}
   ${sec('insumos', 'Catálogo de insumos (compra, rendimiento y merma)', ICONS.bag, itemsEditor())}
