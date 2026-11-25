@@ -5,7 +5,7 @@
    - Los datos del café viven en localStorage, no aquí: esta caché solo guarda código y estilos.
    - Red primero, caché de respaldo: tras publicar una versión nueva la app se actualiza sola al tener conexión.
    Si agregas o renombras un archivo de la app, actualiza ARCHIVOS (una prueba lo verifica) y sube CACHE. */
-const CACHE = 'bruna-app-v2';
+const CACHE = 'bruna-app-v3';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const ARCHIVOS = [
   './js/depuracion.js',
   './js/dialogo.js',
   './js/editores.js',
+  './js/estacionalidad.js',
   './js/estado.js',
   './js/finanzas.js',
   './js/iva.js',

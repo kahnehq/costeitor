@@ -4,10 +4,11 @@ import { CATS, COBROS, ITEM_CATS, MEDIOS } from './constantes.js';
 import { dosisReceta, sellables } from './costeo.js';
 import { aBruto, aNeto } from './iva.js';
 import { cajaEditor, fixedEditor, itemsEditor, menuEditor, paramsEditor, syncEditor } from './editores.js';
-import { G, S, UI, dayOf, dayTotal, live } from './estado.js';
+import { D, G, S, UI, dayOf, dayTotal, live } from './estado.js';
 import { budget, equilibrio, flujo, pl, real } from './finanzas.js';
 import { catPill, fld, sel, tgl } from './render.js';
 import { ganadora, perdedora } from './conflictos.js';
+import { porDiaSemana, porMes, porTemporada } from './estacionalidad.js';
 import { CONF, SYNC, ghCfg } from './sync.js';
 import { $, ICONS, clp, daysInMonth, dec, esc, fmtDay, icon, monthLabel, monthShort, nfmt, pad, pct, sum, thisMonth, today } from './util.js';
 
@@ -185,9 +186,30 @@ export function panelMes() {
     <div class="chart-line"><div class="chart">${vals.map((v, i) => `<div class="col ${v ? '' : 'zero'}" title="${i + 1}: ${clp(v)}"><i style="height:${v / mx * 100}%"></i><small>${(i + 1) % 5 === 1 || nd < 16 ? i + 1 : ''}</small></div>`).join('')}</div>
     ${ref ? `<div class="chart-ref" style="bottom:${ref / mx * 126 + 14}px"><span>equilibrio ${clp(ref)}/día</span></div>` : ''}</div>
   </div>
+  ${ventasPatrones(mk, r)}
   <div class="card"><div class="card-title">${icon(ICONS.chart)} Estado de resultados (sin IVA)</div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Concepto</th><th>Presupuesto</th><th>Real</th><th>Diferencia</th><th>% ventas</th></tr></thead><tbody>
     ${erRows(pb, pr, b, r)}</tbody></table></div></div>`;
+}
+/* ── VENTAS POR DÍA DE LA SEMANA Y POR TEMPORADA ── */
+export function ventasPatrones(mk, r) {
+  const todo = UI.diasAlcance === 'todo', dias = todo ? D.days : r.days, sem = porDiaSemana(dias), hay = sem.some(x => x.dias);
+  const mx = Math.max(1, ...sem.map(x => x.prom)), mejor = hay ? sem.reduce((a, x) => x.prom > a.prom ? x : a) : null;
+  const temp = porTemporada(D.days), meses = porMes(D.days).slice(-12), tmx = Math.max(1, ...temp.map(x => x.prom)), mmx = Math.max(1, ...meses.map(x => x.prom));
+  const nDias = sum(temp, x => x.dias);
+  return `<div class="card"><div class="card-title">${icon(ICONS.chart)} Ventas por día de la semana</div>
+    <div class="chips mb-12"><button class="chip ${!todo ? 'on' : ''}" data-act="diasAlcance" data-k="mes">${monthLabel(mk)}</button><button class="chip ${todo ? 'on' : ''}" data-act="diasAlcance" data-k="todo">Todo el historial</button></div>
+    ${hay ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Día</th><th>Días</th><th>Promedio</th><th>Cafés/día</th></tr></thead><tbody>
+      ${sem.map(x => `<tr class="${mejor && x.i === mejor.i ? 'tot' : ''}"><td>${x.dia}</td><td>${x.dias}</td><td style="min-width:90px">${x.dias ? clp(x.prom) : '—'}<div class="bar"><i style="width:${x.prom / mx * 100}%"></i></div></td><td>${x.dias ? dec(x.cafesDia, 1) : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="muted mt-12">Ventas con IVA, promedio por día con ventas registradas. Mejor día: <b>${mejor.dia}</b> (${clp(mejor.prom)}).${sum(sem, x => x.dias) < 14 ? ' Con pocos días registrados el patrón todavía no es confiable.' : ''}</div>`
+      : '<div class="muted">Aún no hay ventas registradas' + (todo ? '.' : ' en este mes. Prueba con “Todo el historial”.') + '</div>'}</div>
+  <div class="card"><div class="card-title">${icon(ICONS.chart)} Ventas por temporada</div>
+    ${nDias ? `${temp.map(x => `<div class="catbar"><span>${x.n}</span><div class="bar"><i style="width:${x.prom / tmx * 100}%"></i></div><b>${x.dias ? clp(x.prom) : '—'}</b></div>
+      <div class="muted mb-8" style="margin-top:-2px">${x.dias ? `${x.dias} día${x.dias > 1 ? 's' : ''} abierto${x.dias > 1 ? 's' : ''} en ${x.meses} mes${x.meses > 1 ? 'es' : ''} · ${dec(x.cafesDia, 1)} cafés por día` : 'Sin datos'}</div>`).join('')}
+      <div class="group-h">Promedio por día abierto, mes a mes</div>
+      ${meses.map(x => `<div class="catbar"><span>${monthShort(x.mk)}</span><div class="bar"><i style="width:${x.prom / mmx * 100}%"></i></div><b>${clp(x.prom)}</b></div>`).join('')}
+      <div class="muted mt-12">Verano = dic–feb, otoño = mar–may, invierno = jun–ago, primavera = sep–nov. Para comparar temporadas hace falta al menos un año de historial.</div>`
+      : '<div class="muted">Aparecerá cuando registres ventas en la caja del día.</div>'}</div>`;
 }
 export function erRows(pb, pr, b, r) {
   const row = (l, a, c, cls = '', isPct = false) => { const d = c - a; const f = isPct ? (v => pct(v)) : clp; return `<tr class="${cls}"><td>${l}</td><td>${f(a)}</td><td class="${c < 0 ? 'neg' : ''}">${f(c)}</td><td class="${d < 0 ? 'neg' : ''}">${isPct ? pct(d) : clp(d)}</td><td>${isPct || !pr.neto ? '' : pct(c / pr.neto)}</td></tr>`; };

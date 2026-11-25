@@ -24,6 +24,7 @@ Sin build: `index.html` solo carga `styles.css` y `js/main.js` (`<script type="m
 | `dialogo.js` | `ask({ titulo, texto, ok, peligro, escribir })` → `Promise<boolean>`: confirmaciones propias (reemplazan a `confirm()`) | sí |
 | `acciones.js` | `ACTS`, `CHANGES`, exportar CSV/JSON | sí |
 | `conflictos.js` | `detectarConflictos`, `camposDistintos`: detecta lo que `merge()` pisó (funciones puras) | no |
+| `estacionalidad.js` | `porDiaSemana`, `porTemporada`, `porMes`: ventas por día de la semana y por temporada (sin DOM) | no |
 | `sync.js` | sincronización opcional con GitHub (`merge`, `gh`, `sync`) | solo `paintSync` |
 | `main.js` | eventos globales e inicio | sí |
 | `depuracion.js` | publica la API interna en `window`, solo para pruebas y consola | — |
@@ -123,6 +124,7 @@ consumo(item)   = Σ unidadesMes(producto) × qty / factor  [+ unidadesMes(item)
 - **Estado de resultados** (`pl(x)`), sin IVA: ventas netas − costo de ventas (café, helado, reventa, desechables) = margen bruto − (costos fijos + comisiones + limpieza + otros) = EBITDA − cuota del préstamo = resultado. El retiro del dueño solo afecta la caja.
 - **Equilibrio**: costos fijos totales (fijos + limpieza + otros + préstamo) ÷ margen de contribución %. El costo variable usado es el **mayor** entre compras planificadas y costo según recetas (criterio conservador). Se expresa en cafés por día al precio promedio ponderado de los cafés.
 - **F29 / flujo** (`flujo()`): 12 meses desde `settings.inicio`. Cada mes usa datos reales si tiene registros y, si no, el presupuesto. IVA a pagar = máx(0, débito − crédito − remanente); arrastra el remanente. PPM = ventas netas × `ppm`. El F29 del mes N se paga el día 20 del mes N+1, y por eso aparece como egreso del mes siguiente.
+- **Patrones de venta** (pestaña Mes, `estacionalidad.js`): promedio de venta bruta (con IVA) por **día abierto** (día con ventas > 0) para cada día de la semana (mes elegido o todo el historial) y por temporada del hemisferio sur (verano dic–feb, otoño mar–may, invierno jun–ago, primavera sep–nov) más el promedio mes a mes. Ojo: en las filas de temporada `n` es el **nombre**; el conteo de días es `dias`. Con poco historial se avisa que no es confiable.
 - Comisiones vigentes (nov 2026): TUU 1,49 % + IVA, tasa plana; Mercado Pago Point Smart 2 2,19 % débito y 2,69 % crédito (facturación bajo $2 MM/mes). Son editables en Ajustes.
 
 ## Sincronización con GitHub
@@ -147,4 +149,3 @@ npm test
 ## Pendientes y siguientes pasos
 
 - Completar precios de insumos en $0 (leche, vasos, tapas, azúcar, preparado de helado por ml) y las recetas de cappuccino, latte y helado. Son datos de Carlos, no del código.
-- Ventas por día de la semana y por temporada (verano en la costa) en la pestaña Mes.
